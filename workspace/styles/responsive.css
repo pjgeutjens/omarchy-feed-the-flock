@@ -1,0 +1,14 @@
+@media (max-width: 680px) {
+  header, main, .workspace-controls, .workspace-meta, #controls-sentinel {
+    width: calc(100% - 32px);
+  }
+  header { padding-top: 32px; }
+  .title-row { gap: 8px; }
+  .bucket-management { padding-bottom: 2px; }
+  .workspace-controls { grid-template-columns: minmax(0, 1fr) max-content; gap: 6px; }
+  .delivery-block { grid-template-columns: 24px 145px; }
+  .target-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bucket-stats { font-size: 10px; }
+  .note { margin-left: 0; grid-template-columns: 60px minmax(0, 1fr) auto; }
+  .handle, .note-action.feed-now, .sent-toggle, .delete-note { opacity: .7; }
+}

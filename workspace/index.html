@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feed the Flock</title>
+  <link rel="stylesheet" href="/styles/theme.css">
+  <link rel="stylesheet" href="/styles/controls.css">
+  <link rel="stylesheet" href="/styles/overlays.css">
+  <link rel="stylesheet" href="/styles/document.css">
+  <link rel="stylesheet" href="/styles/notes.css">
+  <link rel="stylesheet" href="/styles/responsive.css">
+</head>
+<body>
+  <header>
+    <div class="eyebrow"><span class="brand-icon">󰳆</span> Feed the Flock</div>
+    <div class="title-row">
+      <h1 id="title">Loading…</h1>
+      <div class="bucket-management" aria-label="Import and export bucket">
+        <button class="bucket-action bucket-transfer" id="bucket-import" title="Import Markdown bucket (I)">Import</button>
+        <button class="bucket-action bucket-transfer" id="bucket-export" title="Export bucket as Markdown (X)">Export</button>
+      </div>
+    </div>
+  </header>
+  <div id="controls-sentinel"></div>
+  <div id="workspace-controls" class="workspace-controls">
+    <div class="bucket-row">
+      <div id="bucket-train" class="bucket-train" role="tablist" aria-label="Buckets"></div>
+      <button class="bucket-action" id="bucket-left" title="Move bucket left">‹</button>
+      <button class="bucket-action" id="bucket-right" title="Move bucket right">›</button>
+      <button class="bucket-action" id="bucket-add" title="Create bucket">+</button>
+      <button class="bucket-action" id="bucket-rename" title="Rename bucket">✎</button>
+      <button class="bucket-action delete" id="bucket-delete" title="Delete bucket">×</button>
+    </div>
+    <div class="delivery-block">
+      <div class="target-row delivery-row">
+        <label title="Deliver to" aria-label="Deliver to">→</label>
+        <span id="target-name" class="target-value">Clipboard</span>
+      </div>
+      <div id="bucket-stats" class="bucket-stats" aria-live="polite">
+        <span id="bucket-stats-text">Loading counts…</span>
+      </div>
+    </div>
+    <div class="target-row queue-row">
+      <label title="Feed queue" aria-label="Feed queue">≡</label>
+      <button id="feed-toggle" class="feed-toggle" type="button">▶ Start</button>
+      <div id="feed-queue-list" class="feed-queue-list" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="workspace-meta">
+    <div class="instructions">Left-click to copy · Right-click to edit · Enter saves · Shift+Enter adds a line · Esc undoes · Drag <strong>⠿</strong> to move</div>
+    <div id="status" aria-live="polite">Opening live document…</div>
+  </div>
+  <main id="document"></main>
+  <div id="toast" role="status" aria-live="polite">Copied to clipboard</div>
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <form id="modal-card" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-eyebrow"><span class="brand-icon">󰳆</span> Feed the Flock</div>
+      <h2 id="modal-title"></h2>
+      <p id="modal-message" class="modal-message"></p>
+      <input id="modal-input" class="modal-input" maxlength="50" autocomplete="off">
+      <div class="modal-actions">
+        <button id="modal-cancel" class="modal-button" type="button">Cancel</button>
+        <button id="modal-secondary" class="modal-button danger" type="button" hidden></button>
+        <button id="modal-confirm" class="modal-button primary" type="submit">Confirm</button>
+      </div>
+    </form>
+  </div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+main { padding: 10px 0 100px; }
+section { padding: 34px 0 16px; border-top: 2px solid transparent; border-bottom: 1px solid var(--faint); }
+section.feed-current {
+  margin: 18px 0 10px; padding: 22px 20px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 54%, transparent);
+  border-left: 4px solid var(--accent); border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 93%, var(--accent));
+  box-shadow: 0 16px 42px rgba(0,0,0,.3);
+}
+section.feed-queued {
+  margin: 10px 0; padding: 20px 18px 16px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 38%, transparent);
+  border-radius: 10px; background: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+section.section-drop { border-top-color: var(--accent); }
+.section-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.section-heading h2 { flex: 1; }
+.feed-section-label {
+  color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; padding: 4px 7px; border: 1px solid currentColor;
+  border-radius: 999px; white-space: nowrap;
+}
+.feed-section-label.active::before { content: '●'; margin-right: 5px; }
+.section-actions { display: flex; gap: 4px; opacity: 1; }
+h2 { margin: 0; font-size: 21px; line-height: 1.25; letter-spacing: -.015em; }
+.section-handle {
+  border: 0;
+  padding: 2px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  font: inherit;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+section:hover .section-handle, .section-handle:focus { opacity: 1; }
+.section-handle:active { cursor: grabbing; }
+.notes { min-height: 18px; }
+.feed-monitor {
+  border: 1px solid var(--faint); border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 94%, var(--text));
+}
+.feed-timeline-toolbar {
+  flex: none; display: flex; align-items: center; gap: 9px;
+  padding: 8px 11px; border-bottom: 1px solid var(--faint);
+  color: var(--muted); font-size: 11px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.feed-timeline-toolbar strong { color: var(--accent); }
+.submitted-toggle {
+  margin-left: auto; border: 1px solid var(--faint); border-radius: 5px;
+  padding: 3px 7px; background: transparent; color: var(--muted);
+  cursor: pointer; font: inherit; letter-spacing: .04em; text-transform: uppercase;
+}
+.submitted-toggle:hover { color: var(--text); }
+.feed-timeline { padding: 8px 10px 14px; }
+.feed-timeline.hide-submitted .note.sent:not(.active) { display: none; }
+.feed-timeline

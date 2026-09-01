@@ -1,0 +1,2 @@
+module io.github.pjgeutjens.agentfeed
+singleton AgentFeedState 1.0 AgentFeedState.qml

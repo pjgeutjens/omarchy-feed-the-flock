@@ -1,0 +1,157 @@
+.note {
+  margin: 4px 0; padding: 7px 6px;
+  border: 0; border-left: 3px solid var(--faint); border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.feed-timeline .note {
+  margin-left: 0;
+  padding: 7px 6px;
+}
+.feed-timeline .note.drop-before { box-shadow: inset 0 2px var(--accent); }
+.queue-boundary {
+  margin: 8px 0 5px; padding: 7px 5px 5px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent); font-size: 10px; font-weight: 850;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.feed-timeline .note.imminent {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.note {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: start;
+  margin-left: 0;
+  padding: 5px 0;
+}
+.note.drop-before { box-shadow: inset 0 2px var(--accent); }
+.note.drop-after { box-shadow: inset 0 -2px var(--accent); }
+.note.attachment-drop {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.note-gutter {
+  display: grid; grid-template-columns: repeat(4, 15px);
+  width: 60px; min-height: 24px; align-items: start;
+}
+.note-status-slot {
+  display: grid; width: 15px; min-height: 24px; place-items: center;
+}
+.handle {
+  width: 15px; border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  font: inherit;
+  line-height: 1.4;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  user-select: none;
+}
+.note:hover .handle, .note:focus-within .handle { opacity: 1; }
+.handle:active { cursor: grabbing; }
+.note-content { display: flex; align-items: start; min-width: 0; gap: 7px; }
+.delivery-error-marker {
+  display: inline-grid; flex: none; width: 15px; height: 15px; place-items: center;
+  border: 1px solid var(--danger); border-radius: 50%; color: var(--danger);
+  font: 800 11px/1 ui-sans-serif, system-ui, sans-serif;
+}
+.attachment-strip {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 16px;
+  flex: none; width: max-content; min-height: 24px; align-items: start;
+}
+.attachment-icon {
+  position: relative; display: inline-grid; width: 16px; height: 24px;
+  border: 0; border-radius: 4px; padding: 0; place-items: center;
+  background: transparent; color: var(--accent); cursor: pointer;
+  font: 13px/1 "JetBrainsMono Nerd Font", "CaskaydiaMono Nerd Font", monospace;
+}
+.attachment-icon:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.attachment-add-inline {
+  display: inline-grid; width: 16px; height: 24px; border: 0; border-radius: 4px;
+  padding: 0; place-items: center; background: transparent; color: var(--muted); cursor: pointer;
+  font: 13px/1 ui-sans-serif, system-ui, sans-serif;
+}
+.add-image-glyph {
+  display: grid; box-sizing: border-box; width: 13px; height: 13px; place-items: center;
+  border: 1px solid currentColor; border-radius: 2px;
+  font: 10px/1 ui-sans-serif, system-ui, sans-serif;
+}
+.attachment-add-inline:hover, .attachment-add-inline:focus {
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.attachment-preview {
+  display: none; position: absolute; z-index: 30; right: 0; bottom: calc(100% + 7px);
+  width: min(176px, calc(100vw - 32px)); height: 112px; padding: 3px; object-fit: contain;
+  border: 1px solid var(--faint); border-radius: 7px;
+  background: var(--bg); box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 62%, transparent);
+}
+.attachment-icon:hover .attachment-preview, .attachment-icon:focus .attachment-preview { display: block; }
+.jumped-marker {
+  flex: none; color: var(--accent); font-size: 13px; line-height: 1;
+  text-decoration: none; opacity: .78;
+}
+.note.sent .text { color: var(--muted); text-decoration: line-through; }
+.note.sent.active {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.note.sent.active .text { color: var(--text); text-decoration: none; }
+.active-note-label {
+  flex: none; margin-top: 3px; padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 999px; color: var(--accent);
+  font: 800 9px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.note-actions { display: flex; align-items: start; gap: 2px; }
+.note-action.feed-now,
+.sent-toggle,
+.delete-note {
+  display: inline-grid; width: 24px; height: 24px; place-items: center;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: 18px/1 ui-sans-serif, system-ui, sans-serif;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+.note-action.feed-now {
+  font-family: ui-monospace, monospace; font-size: 14px;
+  font-weight: 400; font-variant-emoji: text;
+}
+.note:hover .note-action.feed-now, .note:focus-within .note-action.feed-now,
+.note:hover .sent-toggle, .note:focus-within .sent-toggle,
+.note:hover .delete-note, .note:focus-within .delete-note,
+.note.sent .sent-toggle { opacity: 1; }
+.note-action.feed-now:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.sent-toggle:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.delete-note:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.text {
+  flex: 1; min-width: 0; min-height: 1.55em;
+  padding: 2px 4px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+  cursor: copy;
+}
+.text[contenteditable="true"] { cursor: text; }
+.text:focus { background: rgba(255,255,255,.045); box-shadow: 0 0 0 1px var(--faint); }
+.note.dragging { opacity: .35; }
+.empty { color: var(--muted); font-style: italic; padding: 4px 0; }
+.add {
+  border: 0;
+  padding: 5px 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+.add:hover { color: var(--text); }

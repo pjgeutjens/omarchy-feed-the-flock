@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""Feed the Flock command-line entry point."""
+
+import argparse
+import sqlite3
+import sys
+import time
+
+from feed_the_flock.capture import finalize, record_cancel, record_start, record_stop
+from feed_the_flock.feed import (
+    deliver_command,
+    feed_control,
+    feed_resume_countdown,
+    feed_worker,
+    select_mode,
+    select_queue_order,
+    select_target,
+    targets_command,
+)
+from feed_the_flock.store import (
+    add_bucket,
+    add_feed_section_queue,
+    add_note,
+    add_section,
+    connect,
+    delete_bucket,
+    delete_note,
+    delete_section,
+    move_bucket,
+    move_note,
+    move_note_to_section,
+    move_section,
+    place_note,
+    place_section,
+    remove_feed_section_queue,
+    rename_bucket,
+    rename_section,
+    select_bucket,
+    select_feed_section,
+    select_feed_section_now,
+    select_section,
+    set_note_sent,
+    set_setting,
+    state_command,
+    update_note,
+)
+from feed_the_flock.workspace import (
+    export_markdown_bucket,
+    import_markdown_bucket,
+    import_markdown_bucket_dialog,
+    markdown_bucket,
+    open_bucket,
+    workspace_bucket,
+    workspace_serve,
+)
+
+def seed_demo(_: argparse.Namespace) -> None:
+    sample_sections = [
+        ("capture-experience", "Capture Experience"),
+        ("navigation", "Navigation"),
+        ("organization", "Organization"),
+        ("markdown-view", "Markdown View"),
+        ("delivery", "Agent Delivery"),
+    ]
+    sample_notes = {
+        "capture-experience": [
+            "Show a note card immediately while transcription is still running.",
+            "Keep the selected bucket and section visible during push-to-talk capture.",
+        ],
+        "navigation": [
+            "Make the keyboard focus obvious when switching between buckets, sections, and notes.",
+            "Keep the most useful navigation shortcuts visible in the panel footer.",
+        ],
+        "organization": [
+            "Organize feedback under semantic section headings instead of globally sorting every message.",
+            "Animate note cards as they move into a section or change position.",
+            "Allow notes to be dragged onto a section chip.",
+        ],
+        "markdown-view": [
+            "Add an Open bucket as Markdown action using the selected Omarchy editor.",
+        ],
+        "delivery": [
+            "Let each bucket target a live agent session; implement delivery after capture organization feels right.",
+        ],
+    }
+    with connect() as db:
+        bucket_id = "agent-feed"
+        for position, (suffix, name) in enumerate(sample_sections):
+            section_id = f"{bucket_id}:{suffix}"
+            db.execute(
+                "INSERT OR IGNORE INTO sections(id, bucket_id, name, position) VALUES (?, ?, ?, ?)",
+                (section_id, bucket_id, name, position),
+            )
+            for note_position, text in enumerate(sample_notes[suffix]):
+                note_id = f"sample:{suffix}:{note_position}"
+                db.execute(
+                    "INSERT OR IGNORE INTO notes(id, bucket_id, section_id, text, position, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (note_id, bucket_id, section_id, text, note_position, int(time.time()) - 600 + note_position),
+                )
+        set_setting(db, "active_bucket", bucket_id)
+        set_setting(db, f"active_section:{bucket_id}", "agent-feed:capture-experience")
+        db.commit()
+
+
+def init_command(_: argparse.Namespace) -> None:
+    connect().close()
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser(prog="feed-the-flock")
+    commands = root.add_subparsers(dest="command", required=True)
+    commands.add_parser("init").set_defaults(func=init_command)
+    commands.add_parser("state").set_defaults(func=state_command)
+    commands.add_parser("targets").set_defaults(func=targets_command)
+    deliver = commands.add_parser("deliver")
+    deliver.add_argument("note_id")
+    deliver.add_argument("target_id", nargs="?")
+    deliver.add_argument("--force", action="store_true", help="submit while the target is working")
+    deliver.set_defaults(func=deliver_command)
+    target = commands.add_parser("target")
+    target_commands = target.add_subparsers(dest="target_command", required=True)
+    target_select = target_commands.add_parser("select")
+    target_select.add_argument("target_id")
+    target_select.set_defaults(func=select_target)
+    mode = commands.add_parser("mode")
+    mode_commands = mode.add_subparsers(dest="mode_command", required=True)
+    mode_select = mode_commands.add_parser("select")
+    mode_select.add_argument(
+        "mode",
+        choices=("idle-active-next", "idle-active-batch", "idle-all-next", "idle-all-batch"),
+    )
+    mode_select.set_defaults(func=select_mode)
+    order = commands.add_parser("order")
+    order_commands = order.add_subparsers(dest="order_command", required=True)
+    order_select = order_commands.add_parser("select")
+    order_select.add_argument("order", choices=("fifo", "lifo"))
+    order_select.set_defaults(func=select_queue_order)
+    feed = commands.add_parser("feed")
+    feed_commands = feed.add_subparsers(dest="feed_command", required=True)
+    for action in ("start", "stop", "toggle", "resume"):
+        feed_commands.add_parser(action).set_defaults(func=feed_control, action=action)
+
+    bucket = commands.add_parser("bucket")
+    bucket_commands = bucket.add_subparsers(dest="bucket_command", required=True)
+    select = bucket_commands.add_parser("select")
+    select.add_argument("bucket_id")
+    select.set_defaults(func=select_bucket)
+    bucket_add = bucket_commands.add_parser("add")
+    bucket_add.add_argument("name")
+    bucket_add.set_defaults(func=add_bucket)
+    bucket_rename = bucket_commands.add_parser("rename")
+    bucket_rename.add_argument("bucket_id")
+    bucket_rename.add_argument("name")
+    bucket_rename.set_defaults(func=rename_bucket)
+    bucket_move = bucket_commands.add_parser("move")
+    bucket_move.add_argument("bucket_id")
+    bucket_move.add_argument("direction", choices=("left", "right"))
+    bucket_move.set_defaults(func=move_bucket)
+    bucket_delete = bucket_commands.add_parser("delete")
+    bucket_delete.add_argument("bucket_id")
+    bucket_delete.set_defaults(func=delete_bucket)
+    bucket_markdown = bucket_commands.add_parser("markdown")
+    bucket_markdown.add_argument("bucket_id", nargs="?")
+    bucket_markdown.set_defaults(func=markdown_bucket)
+    bucket_export = bucket_commands.add_parser("export")
+    bucket_export.add_argument("bucket_id", nargs="?")
+    bucket_export.add_argument("--notify", action="store_true")
+    bucket_export.set_defaults(func=export_markdown_bucket)
+    bucket_import = bucket_commands.add_parser("import")
+    bucket_import.add_argument("path")
+    bucket_import.set_defaults(func=import_markdown_bucket)
+    bucket_import_dialog = bucket_commands.add_parser("import-dialog")
+    bucket_import_dialog.set_defaults(func=import_markdown_bucket_dialog)
+    bucket_open = bucket_commands.add_parser("open")
+    bucket_open.add_argument("bucket_id", nargs="?")
+    bucket_open.set_defaults(func=open_bucket)
+    bucket_workspace = bucket_commands.add_parser("workspace")
+    bucket_workspace.add_argument("bucket_id", nargs="?")
+    bucket_workspace.set_defaults(func=workspace_bucket)
+
+    section = commands.add_parser("section")
+    section_commands = section.add_subparsers(dest="section_command", required=True)
+    section_select = section_commands.add_parser("select")
+    section_select.add_argument("section_id")
+    section_select.set_defaults(func=select_section)
+    section_feed = section_commands.add_parser("feed")
+    section_feed.add_argument("section_id")
+    section_feed.set_defaults(func=select_feed_section)
+    section_feed_now = section_commands.add_parser("feed-now")
+    section_feed_now.add_argument("section_id")
+    section_feed_now.set_defaults(func=select_feed_section_now)
+    section_queue = section_commands.add_parser("queue")
+    section_queue.add_argument("section_id")
+    section_queue.set_defaults(func=add_feed_section_queue)
+    section_dequeue = section_commands.add_parser("dequeue")
+    section_dequeue.add_argument("section_id")
+    section_dequeue.set_defaults(func=remove_feed_section_queue)
+    section_add = section_commands.add_parser("add")
+    section_add.add_argument("name")
+    section_add.set_defaults(func=add_section)
+    section_rename = section_commands.add_parser("rename")
+    section_rename.add_argument("section_id")
+    section_rename.add_argument("name")
+    section_rename.set_defaults(func=rename_section)
+    section_delete = section_commands.add_parser("delete")
+    section_delete.add_argument("section_id")
+    section_delete.add_argument("--notes", choices=("move", "discard"), default="move")
+    section_delete.set_defaults(func=delete_section)
+    section_place = section_commands.add_parser("place")
+    section_place.add_argument("section_id")
+    section_place.add_argument("before_section_id", nargs="?")
+    section_place.set_defaults(func=place_section)
+    section_move = section_commands.add_parser("move")
+    section_move.add_argument("section_id")
+    section_move.add_argument("direction", choices=("left", "right"))
+    section_move.set_defaults(func=move_section)
+
+    note = commands.add_parser("note")
+    note_commands = note.add_subparsers(dest="note_command", required=True)
+    add = note_commands.add_parser("add")
+    add.add_argument("text")
+    add.add_argument("--bucket", dest="bucket_id")
+    add.add_argument("--section", dest="section_id")
+    add.set_defaults(func=add_note)
+    update = note_commands.add_parser("update")
+    update.add_argument("note_id")
+    update.add_argument("text")
+    update.set_defaults(func=update_note)
+    move = note_commands.add_parser("move")
+    move.add_argument("note_id")
+    move.add_argument("direction", choices=("up", "down"))
+    move.set_defaults(func=move_note)
+    note_move_section = note_commands.add_parser("move-section")
+    note_move_section.add_argument("note_id")
+    note_move_section.add_argument("section_id")
+    note_move_section.set_defaults(func=move_note_to_section)
+    place = note_commands.add_parser("place")
+    place.add_argument("note_id")
+    place.add_argument("before_note_id")
+    place.set_defaults(func=place_note)
+    note_sent = note_commands.add_parser("sent")
+    note_sent.add_argument("note_id")
+    note_sent.add_argument("state", choices=("sent", "unsent"))
+    note_sent.set_defaults(func=set_note_sent)
+    delete = note_commands.add_parser("delete")
+    delete.add_argument("note_id")
+    delete.set_defaults(func=delete_note)
+
+    record = commands.add_parser("record")
+    record_commands = record.add_subparsers(dest="record_command", required=True)
+    record_commands.add_parser("start").set_defaults(func=record_start)
+    record_commands.add_parser("stop").set_defaults(func=record_stop)
+    record_commands.add_parser("cancel").set_defaults(func=record_cancel)
+
+    demo = commands.add_parser("seed-demo")
+    demo.set_defaults(func=seed_demo)
+
+    internal = commands.add_parser("_finalize")
+    internal.add_argument("capture")
+    internal.add_argument("bucket_id")
+    internal.add_argument("section_id")
+    internal.set_defaults(func=finalize)
+    commands.add_parser("_workspace-serve").set_defaults(func=workspace_serve)
+    commands.add_parser("_feed-worker").set_defaults(func=feed_worker)
+    commands.add_parser("_feed-resume").set_defaults(func=feed_resume_countdown)
+    return root
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        args.func(args)
+        return 0
+    except (OSError, sqlite3.Error, ValueError) as error:
+        print(f"feed-the-flock: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

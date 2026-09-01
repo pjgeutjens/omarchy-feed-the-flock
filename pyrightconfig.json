@@ -1,0 +1,14 @@
+{
+  "include": [
+    "bin/feed-the-flock",
+    "bin/feed_the_flock"
+  ],
+  "exclude": [
+    "**/__pycache__"
+  ],
+  "extraPaths": [
+    "bin"
+  ],
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "basic"
+}
