@@ -2,10 +2,12 @@
 """Feed the Flock command-line entry point."""
 
 import argparse
+import json
 import sqlite3
 import sys
 import time
 
+from feed_the_flock.bindings import BindingConflict, register_binding_parser
 from feed_the_flock.capture import finalize, record_cancel, record_start, record_stop
 from feed_the_flock.feed import (
     deliver_command,
@@ -115,6 +117,7 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("init").set_defaults(func=init_command)
     commands.add_parser("state").set_defaults(func=state_command)
     commands.add_parser("targets").set_defaults(func=targets_command)
+    register_binding_parser(commands)
     deliver = commands.add_parser("deliver")
     deliver.add_argument("note_id")
     deliver.add_argument("target_id", nargs="?")
@@ -275,6 +278,9 @@ def main() -> int:
     try:
         args.func(args)
         return 0
+    except BindingConflict as error:
+        print(json.dumps(error.payload(), ensure_ascii=False), file=sys.stderr)
+        return 3
     except (OSError, sqlite3.Error, ValueError) as error:
         print(f"feed-the-flock: {error}", file=sys.stderr)
         return 1

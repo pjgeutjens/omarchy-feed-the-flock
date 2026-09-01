@@ -16,6 +16,7 @@ Panel {
   property var hostWidget: null
   property bool helpOpen: false
   property bool notesOpen: false
+  property bool bindingsOpen: false
   property bool creatingBucket: false
   property bool creatingSection: false
   property string editingBucketId: ""
@@ -164,6 +165,7 @@ Panel {
 
   function openHelp() {
     root.notesOpen = false
+    root.bindingsOpen = false
     root.helpOpen = true
     keybindingsOverlay.focusSearch()
   }
@@ -181,6 +183,7 @@ Panel {
 
   function openNotes() {
     root.helpOpen = false
+    root.bindingsOpen = false
     keybindingsOverlay.reset()
     root.notesOpen = true
     notesOverlay.open()
@@ -196,6 +199,23 @@ Panel {
     else root.openNotes()
   }
 
+  function openBindings() {
+    root.helpOpen = false
+    root.notesOpen = false
+    keybindingsOverlay.reset()
+    root.bindingsOpen = true
+    if (!AgentFeedCore.AgentFeedState.bindingsInstalled)
+      AgentFeedCore.AgentFeedState.prepareBindings()
+    bindingsOverlay.open()
+  }
+
+  function closeBindings() {
+    bindingsOverlay.stopCapture()
+    bindingsOverlay.clearConflict()
+    root.bindingsOpen = false
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
   onOpenedChanged: {
     AgentFeedCore.AgentFeedState.panelOpen = root.opened
     if (root.opened) {
@@ -204,6 +224,9 @@ Panel {
     } else {
       root.helpOpen = false
       root.notesOpen = false
+      root.bindingsOpen = false
+      bindingsOverlay.stopCapture()
+      bindingsOverlay.clearConflict()
       keybindingsOverlay.reset()
     }
   }
@@ -232,7 +255,7 @@ Panel {
     AgentFeedKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: root.notesOpen || keybindingsOverlay.inputFocused
+      blocked: root.notesOpen || root.bindingsOpen || keybindingsOverlay.inputFocused
         || targetPicker.popupOpen || modePicker.popupOpen || orderPicker.popupOpen
         || newBucketField.activeFocus || newSectionField.activeFocus
       onMoveRequested: function(dx, dy) {
@@ -282,6 +305,7 @@ Panel {
         else if (text === "}") AgentFeedCore.AgentFeedState.moveBucket(
           AgentFeedCore.AgentFeedState.activeBucketId, "right")
         else if (text === "?") root.toggleHelp()
+        else if (text === "k" || text === "K") root.openBindings()
         else if (text === "q" || text === "Q") root.openQueueOrderPicker()
         else if (text === "m" || text === "M") root.openDeliveryModePicker()
         else if (text === "f" || text === "F") AgentFeedCore.AgentFeedState.toggleFeed()
@@ -295,7 +319,7 @@ Panel {
 
       ScrollView {
         id: scrollArea
-        visible: !root.helpOpen && !root.notesOpen
+        visible: !root.helpOpen && !root.notesOpen && !root.bindingsOpen
         anchors.fill: parent
         anchors.bottomMargin: fixedFooter.implicitHeight + Style.space(7)
         clip: true
@@ -836,7 +860,7 @@ Panel {
 
       Rectangle {
         id: fixedFooter
-        visible: !root.helpOpen && !root.notesOpen
+        visible: !root.helpOpen && !root.notesOpen && !root.bindingsOpen
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -845,16 +869,27 @@ Panel {
         Text {
           id: footerText
           anchors.left: parent.left
-          anchors.right: helpButton.left
+          anchors.right: bindingsButton.left
           anchors.rightMargin: Style.space(5)
           anchors.verticalCenter: parent.verticalCenter
-          text: "N notes · O workspace · I/X transfer · T target · M mode · Q order · F feed"
+          text: "N notes · O workspace · K keybindings · T target · M mode · Q order · F feed"
           textFormat: Text.PlainText
           color: root.dimForeground
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
           horizontalAlignment: Text.AlignHCenter
           elide: Text.ElideRight
+        }
+        PanelActionButton {
+          id: bindingsButton
+          anchors.right: helpButton.left
+          anchors.rightMargin: Style.space(3)
+          anchors.verticalCenter: parent.verticalCenter
+          iconText: "󰌌"
+          tooltipText: "Configure keybindings (K)"
+          foreground: root.contentForeground
+          fontFamily: "JetBrainsMono Nerd Font"
+          onClicked: root.openBindings()
         }
         PanelActionButton {
           id: helpButton
@@ -897,7 +932,38 @@ Panel {
         foreground: root.contentForeground
         dimForeground: root.dimForeground
         fontFamily: root.contentFontFamily
+        recordBinding: AgentFeedCore.AgentFeedState.recordBinding
+        feedBinding: AgentFeedCore.AgentFeedState.feedBinding
         onCloseRequested: root.closeHelp()
+      }
+
+      BindingsOverlay {
+        id: bindingsOverlay
+        visible: root.bindingsOpen
+        anchors.fill: parent
+        z: 31
+        foreground: root.contentForeground
+        dimForeground: root.dimForeground
+        urgentForeground: root.urgentForeground
+        fontFamily: root.contentFontFamily
+        recordBinding: AgentFeedCore.AgentFeedState.recordBinding
+        feedBinding: AgentFeedCore.AgentFeedState.feedBinding
+        recordOverride: AgentFeedCore.AgentFeedState.recordBindingOverride
+        feedOverride: AgentFeedCore.AgentFeedState.feedBindingOverride
+        busy: AgentFeedCore.AgentFeedState.busy
+        onSetRequested: function(mode, shortcut, overrideExisting) {
+          AgentFeedCore.AgentFeedState.setBinding(mode, shortcut, overrideExisting)
+        }
+        onClearRequested: function(mode) { AgentFeedCore.AgentFeedState.clearBinding(mode) }
+        onCloseRequested: root.closeBindings()
+      }
+
+      Connections {
+        target: AgentFeedCore.AgentFeedState
+        function onBindingApplied(mode, success) { bindingsOverlay.applied(success) }
+        function onBindingConflict(mode, shortcut, actions) {
+          bindingsOverlay.conflict(mode, shortcut, actions)
+        }
       }
     }
   }

@@ -437,10 +437,13 @@ def state_command(_: argparse.Namespace) -> None:
                     capture_section_name = capture_destination["section_name"]
             except (json.JSONDecodeError, AttributeError):
                 pass
+        from .bindings import binding_values
+        bindings = binding_values(db, persist_migration=False)
         print(
             json.dumps(
                 {
                     "phase": phase,
+                    **bindings,
                     "error": setting(db, "error"),
                     "captureBucketName": capture_bucket_name,
                     "captureSectionName": capture_section_name,

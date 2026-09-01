@@ -12,6 +12,11 @@ Item {
   property bool initialized: false
   property bool refreshing: stateProcess.running
   property bool busy: actionProcess.running
+  property string recordBinding: ""
+  property string feedBinding: ""
+  property bool recordBindingOverride: false
+  property bool feedBindingOverride: false
+  property bool bindingsInstalled: false
   property string phase: "idle"
   property string error: ""
   property string captureBucketName: ""
@@ -55,6 +60,11 @@ Item {
   property string _actionError: ""
   property string _targetsOutput: ""
   property string _targetsError: ""
+  property string _actionKind: ""
+  property string _actionValue: ""
+  property string _actionMode: ""
+  signal bindingApplied(string mode, bool success)
+  signal bindingConflict(string mode, string shortcut, var actions)
 
   readonly property string pluginRoot: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/io.github.pjgeutjens.agentfeed"
@@ -84,6 +94,11 @@ Item {
           || typeof value.activeSectionId !== "string" || typeof value.phase !== "string")
         throw new Error("unexpected state shape")
       root.phase = value.phase
+      root.recordBinding = String(value.recordBinding || "")
+      root.feedBinding = String(value.feedBinding || "")
+      root.recordBindingOverride = Boolean(value.recordBindingOverride)
+      root.feedBindingOverride = Boolean(value.feedBindingOverride)
+      root.bindingsInstalled = Boolean(value.bindingsInstalled)
       root.error = String(value.error || "")
       root.captureBucketName = String(value.captureBucketName || "")
       root.captureSectionName = String(value.captureSectionName || "")
@@ -134,10 +149,13 @@ Item {
     }
   }
 
-  function runAction(arguments) {
+  function runAction(arguments, kind, value, mode) {
     if (!root.installed || actionProcess.running) return false
     root._actionOutput = ""
     root._actionError = ""
+    root._actionKind = String(kind || "")
+    root._actionValue = String(value || "")
+    root._actionMode = String(mode || "")
     root.lastError = ""
     actionProcess.command = [root.commandPath].concat(arguments)
     actionProcess.running = true
@@ -207,6 +225,38 @@ Item {
   function startRecording() { return root.runAction(["record", "start"]) }
   function stopRecording() { return root.runAction(["record", "stop"]) }
   function cancelRecording() { return root.runAction(["record", "cancel"]) }
+  function prepareBindings() { return root.runAction(["binding", "prepare"]) }
+  function setBinding(mode, shortcut, overrideExisting) {
+    var kind = mode === "feed" ? "feed" : "record"
+    var arguments = ["binding", kind, "set", String(shortcut)]
+    if (overrideExisting) arguments.push("--override")
+    return root.runAction(arguments, "binding", String(shortcut), kind)
+  }
+  function clearBinding(mode) {
+    var kind = mode === "feed" ? "feed" : "record"
+    return root.runAction(["binding", kind, "clear"], "binding", "", kind)
+  }
+  function parseBindingConflict(raw) {
+    try {
+      var value = JSON.parse(String(raw || "").trim())
+      if (value && value.type === "binding_conflict" && value.actions instanceof Array)
+        return value.actions.slice(0, 8).map(function(action) {
+          if (!action || typeof action !== "object")
+            return { description: root.cleanError(action), dispatcher: "unknown", argument: "", source: "Unknown" }
+          return {
+            description: root.cleanError(action.description || "Undescribed Hyprland action"),
+            dispatcher: root.cleanError(action.dispatcher || "unknown"),
+            argument: root.cleanError(action.argument || ""),
+            source: root.cleanError(action.source || "Unknown")
+          }
+        })
+    } catch (failure) {}
+    var fallback = root.cleanError(raw)
+    return [{
+      description: fallback === "" ? "Another Hyprland action" : fallback,
+      dispatcher: "unknown", argument: "", source: "Unknown"
+    }]
+  }
 
   Timer {
     interval: root.panelOpen || root.phase !== "idle" ? 500 : 2000
@@ -311,7 +361,21 @@ Item {
     onExited: function(exitCode) {
       var stdout = String(root._actionOutput || actionStdout.text || "")
       var stderr = String(root._actionError || actionStderr.text || "")
-      if (exitCode !== 0) root.lastError = root.cleanError(stderr || stdout || "Feed the Flock action failed")
+      var kind = root._actionKind
+      var value = root._actionValue
+      var mode = root._actionMode
+      root._actionKind = ""
+      root._actionValue = ""
+      root._actionMode = ""
+      if (exitCode === 3 && kind === "binding") {
+        root.lastError = ""
+        root.bindingConflict(mode, value, root.parseBindingConflict(stderr || stdout))
+        return
+      }
+      if (exitCode !== 0) {
+        root.lastError = root.cleanError(stderr || stdout || "Feed the Flock action failed")
+        if (kind === "binding") root.bindingApplied(mode, false)
+      } else if (kind === "binding") root.bindingApplied(mode, true)
       Qt.callLater(root.refresh)
       Qt.callLater(root.refreshTargets)
     }

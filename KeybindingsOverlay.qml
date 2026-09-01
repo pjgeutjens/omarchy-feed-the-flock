@@ -10,17 +10,20 @@ Rectangle {
   property color dimForeground: Qt.darker(foreground, 1.55)
   property string fontFamily: Style.font.family
   property string query: ""
+  property string recordBinding: ""
+  property string feedBinding: ""
 
   signal closeRequested()
 
   readonly property bool inputFocused: helpSearch.activeFocus
   readonly property var bindings: [
-    { category: "Global", keys: "Shift+F9", action: "Hold to capture; release to finish" },
-    { category: "Global", keys: "Shift+F10", action: "Toggle the delivery feed" },
+    { category: "Global", keys: root.recordBinding || "Not assigned", action: "Hold to capture; release to finish" },
+    { category: "Global", keys: root.feedBinding || "Not assigned", action: "Toggle the delivery feed" },
     { category: "Navigation", keys: "H/L or ←/→", action: "Previous or next bucket" },
     { category: "Navigation", keys: "Tab / Shift+Tab", action: "Next or previous section" },
     { category: "Navigation", keys: "N", action: "Toggle active-section notes overlay" },
     { category: "Navigation", keys: "O", action: "Open the HTML workspace" },
+    { category: "Navigation", keys: "K", action: "Configure keybindings" },
     { category: "Navigation", keys: "?", action: "Toggle this searchable key list" },
     { category: "Notes overlay", keys: "J/K or ↓/↑", action: "Select next or previous pending note" },
     { category: "Notes overlay", keys: "U/D", action: "Move selected note up or down" },
