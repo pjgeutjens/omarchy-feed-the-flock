@@ -53,10 +53,10 @@ Update with:
 omarchy plugin update io.github.pjgeutjens.agentfeed
 ```
 
-Before removing the plugin, restore shared keybindings if you installed them:
+Before removing the plugin, stop its worker and workspace server and restore shared keybindings:
 
 ```sh
-~/.config/omarchy/plugins/io.github.pjgeutjens.agentfeed/scripts/manage-binding.sh remove
+~/.config/omarchy/plugins/io.github.pjgeutjens.agentfeed/scripts/prepare-remove.sh
 omarchy plugin remove io.github.pjgeutjens.agentfeed
 ```
 
@@ -82,6 +82,12 @@ feed-the-flock deliver <note-id> herdr:<pane-id>
 feed-the-flock bucket export [bucket-id]
 feed-the-flock bucket import <file.md>
 ```
+
+## Security and privacy
+
+Feed the Flock stores note text, transcription output, delivery history, logs, and managed attachments locally under `~/.local/state/agent-feed` with a private parent directory and owner-only database/files. The workspace binds only to `127.0.0.1`, rejects foreign Host and Origin headers, caps request/response sizes, and does not use cloud services itself. Herdr and the selected agent harness may have their own network or cloud behavior.
+
+Delivery intentionally submits note text and attachments as prompts to the selected agent. That agent can act with whatever tools and approvals its harness grants. Review pending captures and imported Markdown before enabling a feed, especially when they contain text or images from an untrusted source.
 
 ## Backend layout
 

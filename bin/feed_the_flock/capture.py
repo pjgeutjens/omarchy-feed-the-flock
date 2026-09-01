@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -9,7 +10,9 @@ import time
 import uuid
 from pathlib import Path
 
-from .common import CAPTURE_DIR, ENTRYPOINT, LOG_PATH, VOXTYPE
+from .common import (
+    CAPTURE_DIR, ENTRYPOINT, LOG_PATH, VOXTYPE, read_regular_file, run_bounded, run_quiet,
+)
 from .store import (
     active_bucket,
     active_section,
@@ -25,15 +28,12 @@ from .store import (
 
 def voxtype_class() -> str:
     try:
-        result = subprocess.run(
+        result = run_bounded(
             [VOXTYPE, "status", "--extended", "--format", "json"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
+            timeout=5, stdout_limit=16 * 1024, stderr_limit=16 * 1024,
         )
-        return str(json.loads(result.stdout or "{}").get("class", ""))
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return str(json.loads(result.stdout.decode(errors="replace") or "{}").get("class", ""))
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError):
         return ""
 
 
@@ -45,18 +45,22 @@ def record_start(_: argparse.Namespace) -> None:
             raise SystemExit("feed-the-flock: Voxtype is not ready")
         CAPTURE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
         capture = CAPTURE_DIR / f"capture.{uuid.uuid4().hex}.txt"
-        capture.touch(mode=0o600)
+        descriptor = os.open(capture, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600)
+        os.close(descriptor)
         bucket_id = active_bucket(db)
         section_id = active_section(db, bucket_id)
         metadata = {"path": str(capture), "bucketId": bucket_id, "sectionId": section_id}
         set_setting(db, "active_capture", json.dumps(metadata))
         set_phase(db, "recording")
-        result = subprocess.run([VOXTYPE, "record", "start", f"--file={capture}"], check=False)
-        if result.returncode != 0:
+        try:
+            returncode = run_quiet([VOXTYPE, "record", "start", f"--file={capture}"], timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            returncode = 1
+        if returncode != 0:
             set_setting(db, "active_capture", "")
             set_phase(db, "error", "Voxtype could not start recording.")
             capture.unlink(missing_ok=True)
-            raise SystemExit(result.returncode)
+            raise SystemExit(returncode)
 
 
 def load_capture(db: sqlite3.Connection) -> dict[str, str]:
@@ -83,10 +87,13 @@ def record_stop(_: argparse.Namespace) -> None:
         if normalized_phase(db) != "recording":
             raise SystemExit("feed-the-flock: no recording is active")
         capture = load_capture(db)
-        result = subprocess.run([VOXTYPE, "record", "stop"], check=False)
-        if result.returncode != 0:
+        try:
+            returncode = run_quiet([VOXTYPE, "record", "stop"], timeout=15)
+        except (OSError, subprocess.TimeoutExpired):
+            returncode = 1
+        if returncode != 0:
             set_phase(db, "error", "Voxtype could not stop recording.")
-            raise SystemExit(result.returncode)
+            raise SystemExit(returncode)
         set_phase(db, "transcribing")
         db.commit()
 
@@ -111,7 +118,10 @@ def record_cancel(_: argparse.Namespace) -> None:
         if normalized_phase(db) != "recording":
             raise SystemExit("feed-the-flock: no recording is active")
         capture = load_capture(db)
-        subprocess.run([VOXTYPE, "record", "cancel"], check=False)
+        try:
+            run_quiet([VOXTYPE, "record", "cancel"], timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
         Path(capture["path"]).unlink(missing_ok=True)
         set_setting(db, "active_capture", "")
         set_phase(db, "cancelled")
@@ -128,8 +138,17 @@ def finalize(args: argparse.Namespace) -> None:
     for _ in range(480):
         status = voxtype_class()
         if status == "idle":
-            if capture.exists() and capture.stat().st_size > 0:
-                text = capture.read_text(encoding="utf-8", errors="replace").strip()
+            try:
+                capture_bytes = read_regular_file(capture, root=CAPTURE_DIR, max_bytes=64 * 1024)
+            except FileNotFoundError:
+                capture_bytes = b""
+            except ValueError as error:
+                with connect() as db:
+                    set_setting(db, "active_capture", "")
+                    set_phase(db, "error", f"Unsafe transcription output: {error}")
+                return
+            if capture_bytes:
+                text = capture_bytes.decode("utf-8", errors="replace").strip()
                 if text:
                     with connect() as db:
                         section_exists = db.execute(

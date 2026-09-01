@@ -235,6 +235,7 @@ Panel {
     id: feedIcon
     Text {
       text: AgentFeedCore.AgentFeedState.recording ? "󰕽" : "󰳆"
+      textFormat: Text.PlainText
       color: AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : root.contentForeground
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.display

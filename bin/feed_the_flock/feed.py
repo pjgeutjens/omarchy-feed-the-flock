@@ -21,6 +21,9 @@ from .common import (
     FEED_LOG,
     FEED_RESUME_LOCK,
     HERDR,
+    read_regular_file,
+    run_bounded,
+    run_quiet,
 )
 from .store import (
     active_bucket,
@@ -32,47 +35,58 @@ from .store import (
     setting,
 )
 
+def safe_label(value: object, maximum: int) -> str:
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value)).replace("<", "‹").replace(">", "›")
+    return " ".join(text.split())[:maximum]
+
+
 def herdr_targets() -> tuple[list[dict[str, object]], str]:
     try:
-        result = subprocess.run(
-            [HERDR, "api", "snapshot"], capture_output=True, text=True, check=False, timeout=5,
+        result = run_bounded(
+            [HERDR, "api", "snapshot"], timeout=5,
+            stdout_limit=512 * 1024, stderr_limit=64 * 1024,
         )
     except FileNotFoundError:
         return [], "Herdr is not installed"
     except subprocess.TimeoutExpired:
         return [], "Herdr did not respond"
+    except ValueError:
+        return [], "Herdr response exceeded the safety limit"
     if result.returncode != 0:
-        message = result.stderr.strip() or result.stdout.strip() or "Herdr is unavailable"
+        message = (result.stderr or result.stdout).decode(errors="replace").strip() or "Herdr is unavailable"
         try:
             message = str(json.loads(message).get("error", {}).get("message", message))
         except (json.JSONDecodeError, AttributeError):
             pass
         return [], message[:240]
     try:
-        response = json.loads(result.stdout).get("result", {})
+        response = json.loads(result.stdout.decode(errors="replace")).get("result", {})
         snapshot = response.get("snapshot", response)
         agents = snapshot.get("agents", [])
+        raw_tabs = snapshot.get("tabs", [])
         tabs = {
-            str(tab.get("tab_id", "")): str(tab.get("label", ""))
-            for tab in snapshot.get("tabs", []) if isinstance(tab, dict)
+            str(tab.get("tab_id", "")): safe_label(tab.get("label", ""), 120)
+            for tab in (raw_tabs[:256] if isinstance(raw_tabs, list) else [])
+            if isinstance(tab, dict)
         }
-    except (json.JSONDecodeError, AttributeError):
+    except (json.JSONDecodeError, AttributeError, TypeError):
         return [], "Herdr returned invalid session data"
     targets: list[dict[str, object]] = []
-    for agent in agents if isinstance(agents, list) else []:
+    for agent in (agents[:128] if isinstance(agents, list) else []):
         if not isinstance(agent, dict):
             continue
         pane_id = str(agent.get("pane_id", ""))
         if not re.fullmatch(r"[A-Za-z0-9]+:p[A-Za-z0-9]+", pane_id):
             continue
-        status = str(agent.get("agent_status", "unknown"))
-        name = str(agent.get("agent", "agent"))
+        status = safe_label(agent.get("agent_status", "unknown"), 40)
+        name = safe_label(agent.get("agent", "agent"), 80)
         tab_label = tabs.get(str(agent.get("tab_id", "")), "")
-        context = str(
+        context = safe_label(
             tab_label
             or agent.get("terminal_title_stripped")
             or Path(str(agent.get("foreground_cwd") or agent.get("cwd") or pane_id)).name
-            or pane_id
+            or pane_id,
+            120,
         )
         targets.append({
             "id": f"herdr:{pane_id}",
@@ -241,7 +255,7 @@ def resume_notification(seconds: int, replace_id: int = 0) -> tuple[subprocess.P
 def notification_was_cancelled(process: subprocess.Popen[bytes] | None) -> bool:
     if process is None or process.poll() is None:
         return False
-    output = process.stdout.read().decode(errors="replace").strip() if process.stdout else ""
+    output = process.stdout.read(256).decode(errors="replace").strip() if process.stdout else ""
     return output == "cancel"
 
 
@@ -250,7 +264,10 @@ def finish_resume_notification(notification_id: int, message: str) -> None:
     if notification_id:
         command.append(f"--replace-id={notification_id}")
     command.extend(("Feed the Flock", message))
-    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    try:
+        run_quiet(command, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def feed_resume_countdown(_: argparse.Namespace) -> None:
@@ -365,43 +382,46 @@ def feed_control(args: argparse.Namespace) -> None:
 
 
 def clipboard_snapshot() -> tuple[str, bytes] | None:
-    listed = subprocess.run(
-        ["wl-paste", "--list-types"], capture_output=True, text=True, check=False, timeout=3,
+    listed = run_bounded(
+        ["wl-paste", "--list-types"], timeout=3,
+        stdout_limit=32 * 1024, stderr_limit=16 * 1024,
     )
     if listed.returncode != 0:
         return None
-    types = [value.strip() for value in listed.stdout.splitlines() if value.strip()]
+    types = [
+        value.strip() for value in listed.stdout.decode(errors="replace").splitlines() if value.strip()
+    ]
     preferred = next((value for value in types if value.startswith("image/")), None)
     if not preferred:
         preferred = next((value for value in types if value.startswith("text/plain")), None)
     if not preferred:
         return None
-    pasted = subprocess.run(
-        ["wl-paste", "--type", preferred], capture_output=True, check=False, timeout=3,
+    pasted = run_bounded(
+        ["wl-paste", "--type", preferred], timeout=3,
+        stdout_limit=8 * 1024 * 1024, stderr_limit=16 * 1024,
     )
     return (preferred, pasted.stdout) if pasted.returncode == 0 else None
 
 
 def restore_clipboard(snapshot: tuple[str, bytes] | None) -> None:
     command = ["wl-copy", "--clear"] if snapshot is None else ["wl-copy", "--type", snapshot[0]]
-    subprocess.run(
-        command, input=None if snapshot is None else snapshot[1],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=3,
-    )
+    run_quiet(command, input_data=None if snapshot is None else snapshot[1], timeout=3)
 
 
 def run_herdr_prompt(target: dict[str, object], text: str) -> None:
     try:
-        result = subprocess.run(
-            [HERDR, "agent", "prompt", str(target["paneId"]), text],
-            capture_output=True, text=True, check=False, timeout=12,
+        result = run_bounded(
+            [HERDR, "agent", "prompt", str(target["paneId"]), text], timeout=12,
+            stdout_limit=64 * 1024, stderr_limit=64 * 1024,
         )
     except FileNotFoundError as error:
         raise ValueError("Herdr is not installed") from error
     except subprocess.TimeoutExpired as error:
         raise ValueError("Herdr did not accept the prompt in time") from error
+    except ValueError as error:
+        raise ValueError("Herdr returned too much output") from error
     if result.returncode != 0:
-        message = result.stderr.strip() or result.stdout.strip() or "Herdr rejected the prompt"
+        message = (result.stderr or result.stdout).decode(errors="replace").strip() or "Herdr rejected the prompt"
         try:
             message = str(json.loads(message).get("error", {}).get("message", message))
         except (json.JSONDecodeError, AttributeError):
@@ -410,7 +430,7 @@ def run_herdr_prompt(target: dict[str, object], text: str) -> None:
 
 
 def prompt_herdr_target(
-    target: dict[str, object], text: str, attachments: list[tuple[Path, str]] | None = None
+    target: dict[str, object], text: str, attachments: list[tuple[bytes, str]] | None = None
 ) -> None:
     attachments = attachments or []
     if not attachments:
@@ -421,40 +441,40 @@ def prompt_herdr_target(
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
             snapshot = clipboard_snapshot()
-        except (FileNotFoundError, subprocess.TimeoutExpired) as error:
-            raise ValueError("Wayland clipboard tools are unavailable for image delivery") from error
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError) as error:
+            raise ValueError("Wayland clipboard data is unavailable or exceeds 8 MB") from error
         try:
-            for path, mime_type in attachments:
+            for attachment, mime_type in attachments:
                 try:
-                    copied = subprocess.run(
-                        ["wl-copy", "--type", mime_type], input=path.read_bytes(),
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        check=False, timeout=5,
+                    copied_returncode = run_quiet(
+                        ["wl-copy", "--type", mime_type], input_data=attachment, timeout=5,
                     )
                 except OSError as error:
                     raise ValueError(f"could not stage image on clipboard: {error}") from error
                 except subprocess.TimeoutExpired as error:
                     raise ValueError("clipboard image staging timed out") from error
-                if copied.returncode != 0:
+                if copied_returncode != 0:
                     raise ValueError("Wayland clipboard rejected the image")
                 try:
-                    pasted = subprocess.run(
+                    pasted = run_bounded(
                         [HERDR, "agent", "send-keys", str(target["paneId"]), "ctrl+v"],
-                        capture_output=True, text=True, check=False, timeout=5,
+                        timeout=5, stdout_limit=32 * 1024, stderr_limit=32 * 1024,
                     )
                 except OSError as error:
                     raise ValueError(f"could not send image paste key: {error}") from error
                 except subprocess.TimeoutExpired as error:
                     raise ValueError("Herdr image paste key timed out") from error
+                except ValueError as error:
+                    raise ValueError("Herdr image paste response exceeded the safety limit") from error
                 if pasted.returncode != 0:
-                    message = pasted.stderr.strip()
+                    message = pasted.stderr.decode(errors="replace").strip()
                     raise ValueError(message[:240] or "the target agent rejected image paste")
                 time.sleep(0.35)
             run_herdr_prompt(target, text)
         finally:
             try:
                 restore_clipboard(snapshot)
-            except (OSError, subprocess.TimeoutExpired):
+            except (OSError, subprocess.TimeoutExpired, ValueError):
                 pass
 
 
@@ -507,21 +527,24 @@ def finish_feed_claim(
         db.commit()
 
 
-def attachment_files(db: sqlite3.Connection, note_ids: list[str]) -> list[tuple[Path, str]]:
+def attachment_files(db: sqlite3.Connection, note_ids: list[str]) -> list[tuple[bytes, str]]:
     if not note_ids:
         return []
     placeholders = ",".join("?" for _ in note_ids)
     root = ATTACHMENT_DIR.resolve()
-    attachments: list[tuple[Path, str]] = []
+    attachments: list[tuple[bytes, str]] = []
     for row in db.execute(
         f"SELECT file_path, mime_type FROM attachments WHERE note_id IN ({placeholders}) "
         "ORDER BY note_id, position, created_at",
         tuple(note_ids),
     ):
-        path = Path(row["file_path"]).resolve()
-        if root not in path.parents or not path.is_file():
-            raise ValueError("an attached image file is unavailable")
-        attachments.append((path, str(row["mime_type"])))
+        try:
+            content = read_regular_file(
+                Path(row["file_path"]), root=root, max_bytes=8 * 1024 * 1024,
+            )
+        except (OSError, ValueError) as error:
+            raise ValueError("an attached image file is unavailable or unsafe") from error
+        attachments.append((content, str(row["mime_type"])))
     return attachments
 
 
@@ -597,7 +620,19 @@ def pending_feed_notes(
         "ORDER BY " + section_order + ", n.position "
         + ("DESC, n.created_at DESC" if queue_order == "lifo" else "ASC, n.created_at ASC"),
         tuple(parameters),
-    ).fetchall()
+    ).fetchmany(200)
+
+
+def batch_selection(notes: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    selected: list[sqlite3.Row] = []
+    total_bytes = 0
+    for note in notes[:100]:
+        note_bytes = len(str(note["text"]).encode("utf-8"))
+        if selected and total_bytes + note_bytes > 512 * 1024:
+            break
+        selected.append(note)
+        total_bytes += note_bytes
+    return selected
 
 
 def batch_prompt(notes: list[sqlite3.Row]) -> str:
@@ -673,7 +708,7 @@ def feed_worker(_: argparse.Namespace) -> None:
             if error or not target or not target["available"]:
                 time.sleep(0.75)
                 continue
-            selected = notes if mode.endswith("batch") else notes[:1]
+            selected = batch_selection(notes) if mode.endswith("batch") else notes[:1]
             if mode.startswith("idle-all-") and selected:
                 with connect() as db:
                     set_setting(db, "feed_section", str(selected[0]["section_id"]))

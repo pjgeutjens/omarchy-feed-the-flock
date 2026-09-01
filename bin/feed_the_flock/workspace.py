@@ -4,14 +4,18 @@ import argparse
 import base64
 import binascii
 import json
+import os
 import re
 import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 import tomllib
 import urllib.parse
+import urllib.request
 import uuid
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,6 +33,9 @@ from .common import (
     WORKSPACE_HTML,
     WORKSPACE_LOG,
     WORKSPACE_PORT,
+    read_regular_file,
+    run_bounded,
+    run_quiet,
 )
 from .feed import deliver_note, feed_control, targets_payload
 from .store import (
@@ -37,6 +44,7 @@ from .store import (
     add_feed_section_queue,
     add_note_to_db,
     add_section,
+    checked_note_text,
     connect,
     delete_bucket,
     delete_section,
@@ -94,14 +102,27 @@ def bucket_markdown_text(db: sqlite3.Connection, bucket_id: str) -> tuple[str, s
     return str(bucket["name"]), "\n".join(lines).rstrip() + "\n"
 
 
+def atomic_write(path: Path, content: bytes, mode: int = 0o600) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def write_bucket_export(db: sqlite3.Connection, bucket_id: str) -> Path:
     bucket_name, markdown = bucket_markdown_text(db, bucket_id)
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     file_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", bucket_name).strip("-") or "bucket"
     path = EXPORT_DIR / f"{file_stem}.md"
-    temporary = path.with_suffix(".md.tmp")
-    temporary.write_text(markdown, encoding="utf-8")
-    temporary.replace(path)
+    atomic_write(path, markdown.encode("utf-8"))
     return path
 
 
@@ -110,9 +131,7 @@ def render_bucket_markdown(db: sqlite3.Connection, bucket_id: str) -> Path:
     export_dir = STATE_DIR / "buckets"
     export_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = export_dir / f"{bucket_id}.md"
-    temporary = path.with_suffix(".md.tmp")
-    temporary.write_text(markdown, encoding="utf-8")
-    temporary.replace(path)
+    atomic_write(path, markdown.encode("utf-8"))
     return path
 
 
@@ -174,6 +193,12 @@ def parse_bucket_markdown(markdown: str) -> tuple[str, list[ImportedSection]]:
 
 def import_bucket_markdown(db: sqlite3.Connection, markdown: str) -> tuple[str, int]:
     bucket_name, sections = parse_bucket_markdown(markdown)
+    if len(sections) > 200:
+        raise ValueError("Markdown imports support at most 200 sections")
+    if sum(len(section.notes) for section in sections) > 2000:
+        raise ValueError("Markdown imports support at most 2,000 notes")
+    if db.execute("SELECT COUNT(*) FROM buckets").fetchone()[0] >= 100:
+        raise ValueError("at most 100 buckets are supported")
     if db.execute("SELECT 1 FROM buckets WHERE name = ? COLLATE NOCASE", (bucket_name,)).fetchone():
         raise ValueError(f"bucket already exists: {bucket_name}")
     stem = re.sub(r"[^a-z0-9]+", "-", bucket_name.lower()).strip("-") or "bucket"
@@ -233,10 +258,12 @@ def markdown_bucket(args: argparse.Namespace) -> None:
 
 
 def desktop_notice(message: str) -> None:
-    subprocess.run(
-        ["notify-send", "--app-name=Feed the Flock", "Feed the Flock", message],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-    )
+    try:
+        run_quiet(
+            ["notify-send", "--app-name=Feed the Flock", "Feed the Flock", message], timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def export_markdown_bucket(args: argparse.Namespace) -> None:
@@ -250,10 +277,13 @@ def export_markdown_bucket(args: argparse.Namespace) -> None:
 
 
 def import_markdown_path(path: Path) -> tuple[str, int]:
+    expanded = path.expanduser()
     try:
-        markdown = path.expanduser().read_text(encoding="utf-8")
-    except OSError as error:
-        raise ValueError(f"could not read {path}: {error}") from error
+        markdown = read_regular_file(
+            expanded, root=expanded.parent, max_bytes=2 * 1024 * 1024,
+        ).decode("utf-8")
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        raise ValueError(f"could not safely read {path}: {error}") from error
     with connect() as db:
         db.execute("BEGIN IMMEDIATE")
         bucket_id, note_count = import_bucket_markdown(db, markdown)
@@ -267,16 +297,19 @@ def import_markdown_bucket(args: argparse.Namespace) -> None:
 
 
 def import_markdown_bucket_dialog(_: argparse.Namespace) -> None:
-    result = subprocess.run(
-        [
-            "zenity", "--file-selection", "--title=Import Feed the Flock bucket",
-            "--file-filter=Markdown files | *.md *.markdown", "--file-filter=All files | *",
-        ],
-        capture_output=True, text=True, check=False,
-    )
+    try:
+        result = run_bounded(
+            [
+                "zenity", "--file-selection", "--title=Import Feed the Flock bucket",
+                "--file-filter=Markdown files | *.md *.markdown", "--file-filter=All files | *",
+            ],
+            timeout=600, stdout_limit=8 * 1024, stderr_limit=8 * 1024,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return
     if result.returncode != 0:
         return
-    selected_path = result.stdout.strip()
+    selected_path = result.stdout.decode(errors="replace").strip()
     if not selected_path:
         return
     bucket_id, note_count = import_markdown_path(Path(selected_path))
@@ -286,7 +319,9 @@ def import_markdown_bucket_dialog(_: argparse.Namespace) -> None:
 
 def omarchy_theme() -> dict[str, str]:
     try:
-        slug = OMARCHY_THEME_NAME.read_text(encoding="utf-8").strip()
+        slug = read_regular_file(
+            OMARCHY_THEME_NAME, root=OMARCHY_THEME_NAME.parent, max_bytes=1024,
+        ).decode("utf-8").strip()
     except OSError:
         slug = ""
     if not re.fullmatch(r"[A-Za-z0-9._-]+", slug):
@@ -297,7 +332,9 @@ def omarchy_theme() -> dict[str, str]:
         OMARCHY_USER_THEMES / slug / "colors.toml",
     ):
         try:
-            values = tomllib.loads(path.read_text(encoding="utf-8"))
+            values = tomllib.loads(
+                read_regular_file(path, root=path.parent, max_bytes=64 * 1024).decode("utf-8")
+            )
         except (OSError, tomllib.TOMLDecodeError):
             continue
         for key, value in values.items():
@@ -323,6 +360,51 @@ IMAGE_TYPES = {
     "image/gif": ".gif",
 }
 MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_DIMENSION = 8192
+MAX_IMAGE_PIXELS = 40_000_000
+
+
+def image_dimensions(body: bytes, mime_type: str) -> tuple[int, int]:
+    width = height = 0
+    if mime_type == "image/png" and body.startswith(b"\x89PNG\r\n\x1a\n") and len(body) >= 24:
+        width, height = int.from_bytes(body[16:20], "big"), int.from_bytes(body[20:24], "big")
+    elif mime_type == "image/gif" and body[:6] in {b"GIF87a", b"GIF89a"} and len(body) >= 10:
+        width, height = int.from_bytes(body[6:8], "little"), int.from_bytes(body[8:10], "little")
+    elif mime_type == "image/jpeg" and body.startswith(b"\xff\xd8"):
+        offset = 2
+        sof_markers = set(range(0xC0, 0xC4)) | set(range(0xC5, 0xC8)) | set(range(0xC9, 0xCC)) | set(range(0xCD, 0xD0))
+        while offset + 4 <= len(body):
+            if body[offset] != 0xFF:
+                offset += 1
+                continue
+            marker = body[offset + 1]
+            offset += 2
+            if marker in {0xD8, 0xD9} or 0xD0 <= marker <= 0xD7:
+                continue
+            length = int.from_bytes(body[offset:offset + 2], "big")
+            if length < 2 or offset + length > len(body):
+                break
+            if marker in sof_markers and length >= 7:
+                height = int.from_bytes(body[offset + 3:offset + 5], "big")
+                width = int.from_bytes(body[offset + 5:offset + 7], "big")
+                break
+            offset += length
+    elif mime_type == "image/webp" and body.startswith(b"RIFF") and body[8:12] == b"WEBP":
+        chunk = body[12:16]
+        if chunk == b"VP8X" and len(body) >= 30:
+            width = 1 + int.from_bytes(body[24:27], "little")
+            height = 1 + int.from_bytes(body[27:30], "little")
+        elif chunk == b"VP8 " and len(body) >= 30 and body[23:26] == b"\x9d\x01\x2a":
+            width = int.from_bytes(body[26:28], "little") & 0x3FFF
+            height = int.from_bytes(body[28:30], "little") & 0x3FFF
+        elif chunk == b"VP8L" and len(body) >= 25 and body[20] == 0x2F:
+            packed = int.from_bytes(body[21:25], "little")
+            width, height = 1 + (packed & 0x3FFF), 1 + ((packed >> 14) & 0x3FFF)
+    if width <= 0 or height <= 0:
+        raise ValueError("image data does not match its declared type")
+    if width > MAX_IMAGE_DIMENSION or height > MAX_IMAGE_DIMENSION or width * height > MAX_IMAGE_PIXELS:
+        raise ValueError("image dimensions exceed the 40 megapixel safety limit")
+    return width, height
 
 
 def note_attachments(db: sqlite3.Connection, note_id: str) -> list[dict[str, object]]:
@@ -348,10 +430,12 @@ def attachment_file(db: sqlite3.Connection, attachment_id: str) -> tuple[Path, s
     ).fetchone()
     if not row:
         raise ValueError("attachment no longer exists")
-    root = ATTACHMENT_DIR.resolve()
-    path = Path(row["file_path"]).resolve()
-    if root not in path.parents or not path.is_file():
-        raise ValueError("attachment file is unavailable")
+    root = Path(os.path.abspath(ATTACHMENT_DIR))
+    if root.resolve() != root:
+        raise ValueError("attachment directory is unsafe")
+    path = Path(os.path.abspath(Path(row["file_path"])))
+    if path.parent != root or not re.fullmatch(r"[0-9a-f]{32}\.(?:png|jpe?g|webp|gif)", path.name):
+        raise ValueError("attachment file path is unsafe")
     return path, str(row["mime_type"]), str(row["file_name"])
 
 
@@ -534,6 +618,9 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
 
     def json_response(self, status: int, payload: object) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode()
+        if len(body) > 12 * 1024 * 1024:
+            status = 413
+            body = b'{"error":"workspace response exceeds 12 MB"}'
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -541,7 +628,21 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def validate_local_request(self) -> None:
+        allowed_hosts = {
+            f"{WORKSPACE_HOST}:{WORKSPACE_PORT}", f"localhost:{WORKSPACE_PORT}",
+        }
+        if self.headers.get("Host", "") not in allowed_hosts:
+            raise ValueError("invalid workspace host")
+        origin = self.headers.get("Origin", "")
+        if origin:
+            parsed_origin = urllib.parse.urlparse(origin)
+            if parsed_origin.scheme != "http" or parsed_origin.netloc not in allowed_hosts:
+                raise ValueError("cross-origin workspace requests are not allowed")
+
     def read_json(self) -> dict[str, object]:
+        if not self.headers.get("Content-Type", "").lower().startswith("application/json"):
+            raise ValueError("workspace mutations require application/json")
         length = int(self.headers.get("Content-Length", "0"))
         if length <= 0 or length > 12_000_000:
             raise ValueError("invalid request body")
@@ -553,6 +654,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         try:
+            self.validate_local_request()
             if parsed.path == "/api/events":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -563,11 +665,13 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     with connect() as db:
                         version = db.execute("PRAGMA data_version").fetchone()[0]
                         elapsed = 0.0
+                        total_elapsed = 0.0
                         self.wfile.write(b"retry: 1000\n\n")
                         self.wfile.flush()
-                        while True:
+                        while total_elapsed < 300:
                             time.sleep(0.5)
                             elapsed += 0.5
+                            total_elapsed += 0.5
                             current = db.execute("PRAGMA data_version").fetchone()[0]
                             if current != version:
                                 version = current
@@ -598,7 +702,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 attachment_id = urllib.parse.parse_qs(parsed.query).get("id", [""])[0]
                 with connect() as db:
                     path, mime_type, file_name = attachment_file(db, attachment_id)
-                body = path.read_bytes()
+                body = read_regular_file(path, root=ATTACHMENT_DIR, max_bytes=8 * 1024 * 1024)
                 safe_name = file_name.replace('"', "")
                 self.send_response(200)
                 self.send_header("Content-Type", mime_type)
@@ -615,8 +719,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     self.json_response(404, {"error": "not found"})
                     return
                 try:
-                    body = asset.read_bytes()
-                except OSError:
+                    body = read_regular_file(asset, root=workspace_root, max_bytes=2 * 1024 * 1024)
+                except (OSError, ValueError):
                     self.json_response(404, {"error": "not found"})
                     return
                 content_type = "text/css" if asset.suffix == ".css" else "text/javascript"
@@ -658,7 +762,9 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     self.json_response(200, bucket_document(db, bucket_id))
                 return
             if parsed.path in {"/", "/index.html"}:
-                body = WORKSPACE_HTML.read_bytes()
+                body = read_regular_file(
+                    WORKSPACE_HTML, root=WORKSPACE_HTML.parent, max_bytes=512 * 1024,
+                )
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
@@ -673,7 +779,12 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         try:
+            self.validate_local_request()
             value = self.read_json()
+            if parsed.path == "/api/shutdown":
+                self.json_response(200, {"ok": True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return
             if parsed.path == "/api/attachment/create":
                 note_id = str(value.get("noteId", ""))
                 mime_type = str(value.get("mimeType", ""))
@@ -686,6 +797,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     raise ValueError("attachment data is invalid") from error
                 if not body or len(body) > MAX_ATTACHMENT_BYTES:
                     raise ValueError("images must be between 1 byte and 8 MB")
+                image_dimensions(body, mime_type)
                 attachment_id = uuid.uuid4().hex
                 file_name = re.sub(r"[^A-Za-z0-9._ -]", "_", str(value.get("name", "image")))[:100]
                 if not file_name:
@@ -700,9 +812,12 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     ).fetchone()[0]
                     if count >= 5:
                         raise ValueError("a note can have at most 5 images")
-                    path.write_bytes(body)
-                    path.chmod(0o600)
+                    descriptor = os.open(
+                        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600,
+                    )
                     try:
+                        with os.fdopen(descriptor, "wb") as stream:
+                            stream.write(body)
                         db.execute(
                             "INSERT INTO attachments(id, note_id, file_name, mime_type, file_path, position, created_at) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -859,9 +974,8 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     self.json_response(200, {"ok": True})
                     return
                 if parsed.path == "/api/note/update":
-                    note_id, text = str(value.get("id", "")), str(value.get("text", "")).strip()
-                    if not text:
-                        raise ValueError("note text cannot be empty")
+                    note_id = str(value.get("id", ""))
+                    text = checked_note_text(str(value.get("text", "")))
                     if not db.execute("UPDATE notes SET text = ? WHERE id = ?", (text, note_id)).rowcount:
                         raise ValueError("note no longer exists")
                     db.commit()
@@ -893,10 +1007,49 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
             self.json_response(400, {"error": str(error)})
 
 
+class BoundedWorkspaceServer(ThreadingHTTPServer):
+    daemon_threads = True
+    request_queue_size = 16
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        self._request_slots = threading.BoundedSemaphore(16)
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request: socket.socket, client_address: object) -> None:
+        if not self._request_slots.acquire(blocking=False):
+            request.close()
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request: socket.socket, client_address: object) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
+
+
 def workspace_serve(_: argparse.Namespace) -> None:
-    if not WORKSPACE_HTML.is_file():
-        raise SystemExit(f"feed-the-flock: workspace is missing: {WORKSPACE_HTML}")
-    ThreadingHTTPServer((WORKSPACE_HOST, WORKSPACE_PORT), WorkspaceHandler).serve_forever()
+    try:
+        read_regular_file(WORKSPACE_HTML, root=WORKSPACE_HTML.parent, max_bytes=512 * 1024)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"feed-the-flock: workspace is missing or unsafe: {error}") from error
+    BoundedWorkspaceServer((WORKSPACE_HOST, WORKSPACE_PORT), WorkspaceHandler).serve_forever()
+
+
+def workspace_stop(_: argparse.Namespace) -> None:
+    request = urllib.request.Request(
+        f"http://{WORKSPACE_HOST}:{WORKSPACE_PORT}/api/shutdown",
+        data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            response.read(1024)
+    except OSError:
+        return
 
 
 def workspace_bucket(args: argparse.Namespace) -> None:

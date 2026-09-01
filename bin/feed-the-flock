@@ -52,6 +52,7 @@ from feed_the_flock.workspace import (
     open_bucket,
     workspace_bucket,
     workspace_serve,
+    workspace_stop,
 )
 
 def seed_demo(_: argparse.Namespace) -> None:
@@ -262,6 +263,7 @@ def parser() -> argparse.ArgumentParser:
     internal.add_argument("section_id")
     internal.set_defaults(func=finalize)
     commands.add_parser("_workspace-serve").set_defaults(func=workspace_serve)
+    commands.add_parser("_workspace-stop").set_defaults(func=workspace_stop)
     commands.add_parser("_feed-worker").set_defaults(func=feed_worker)
     commands.add_parser("_feed-resume").set_defaults(func=feed_resume_countdown)
     return root

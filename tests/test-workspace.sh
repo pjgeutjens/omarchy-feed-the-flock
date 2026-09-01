@@ -25,6 +25,10 @@ for _ in {1..30}; do
   curl -fsS http://127.0.0.1:47832/js/app.js >/dev/null 2>&1 && break
   sleep 0.1
 done
+[[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' \
+  http://127.0.0.1:47832/api/buckets) == 400 ]]
+[[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' \
+  http://127.0.0.1:47832/api/buckets) == 400 ]]
 curl -fsS -X POST -H 'Content-Type: application/json' \
   --data '{"action":"start","bucketId":"inbox","sectionId":"inbox:unsorted"}' \
   http://127.0.0.1:47832/api/feed | jq -e '.feedEnabled == true' >/dev/null

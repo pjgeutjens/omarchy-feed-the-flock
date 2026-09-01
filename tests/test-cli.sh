@@ -37,6 +37,19 @@ cli="$root/bin/feed-the-flock"
 state=$("$cli" state)
 jq -e '.activeBucketId == "inbox" and (.buckets | length) == 3 and .totalCount == 0' <<< "$state" >/dev/null
 
+oversized_note=$(python3 -c 'print("x" * 65537, end="")')
+if "$cli" note add "$oversized_note" >/dev/null 2>&1; then
+  echo "oversized note was accepted" >&2
+  exit 1
+fi
+safe_import="$tmp/safe-import.md"
+printf '# Symlink Import\n\n## Notes\n\n- [ ] unsafe path test\n' > "$safe_import"
+ln -s "$safe_import" "$tmp/import-link.md"
+if "$cli" bucket import "$tmp/import-link.md" >/dev/null 2>&1; then
+  echo "symlinked Markdown import was accepted" >&2
+  exit 1
+fi
+
 "$cli" note add "First note"
 "$cli" note add "Second note"
 state=$("$cli" state)

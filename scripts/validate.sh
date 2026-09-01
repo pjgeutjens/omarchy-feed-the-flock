@@ -31,8 +31,9 @@ done
   echo "bin/feed-the-flock must remain a thin entry point" >&2
   exit 1
 }
-bash -n "$plugin_dir/scripts/manage-binding.sh"
+bash -n "$plugin_dir/scripts/manage-binding.sh" "$plugin_dir/scripts/prepare-remove.sh"
 "$plugin_dir/tests/test-cli.sh"
+"$plugin_dir/tests/test-safety.sh"
 "$plugin_dir/tests/test-attachments.sh"
 "$plugin_dir/tests/test-workspace.sh"
 (

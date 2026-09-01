@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sqlite3
 import time
@@ -9,6 +10,17 @@ import uuid
 from pathlib import Path
 
 from .common import DB_PATH, DEFAULT_BUCKETS, STATE_DIR
+
+MAX_NOTE_BYTES = 64 * 1024
+
+
+def checked_note_text(value: str) -> str:
+    text = value.strip()
+    if not text:
+        raise ValueError("note text cannot be empty")
+    if len(text.encode("utf-8")) > MAX_NOTE_BYTES:
+        raise ValueError("note text must be at most 64 KB")
+    return text
 
 
 def unsorted_section_id(bucket_id: str) -> str:
@@ -35,9 +47,28 @@ def ensure_unsorted_section(db: sqlite3.Connection, bucket_id: str) -> str:
 
 def connect() -> sqlite3.Connection:
     STATE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    STATE_DIR.chmod(0o700)
+    try:
+        descriptor = os.open(DB_PATH, os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        descriptor = os.open(
+            DB_PATH, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600,
+        )
+    os.close(descriptor)
+    DB_PATH.chmod(0o600)
     db = sqlite3.connect(DB_PATH, timeout=10)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(DB_PATH) + suffix)
+        try:
+            sidecar_descriptor = os.open(sidecar, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            continue
+        try:
+            os.fchmod(sidecar_descriptor, 0o600)
+        finally:
+            os.close(sidecar_descriptor)
     db.executescript(
         """
         CREATE TABLE IF NOT EXISTS buckets (
@@ -327,7 +358,7 @@ def state_command(_: argparse.Namespace) -> None:
                 "COUNT(CASE WHEN q.delivered_at IS NOT NULL THEN n.id END) AS submitted_count "
                 "FROM buckets b LEFT JOIN notes n ON n.bucket_id = b.id "
                 "LEFT JOIN feed_queue q ON q.note_id = n.id "
-                "GROUP BY b.id ORDER BY b.position, b.name"
+                "GROUP BY b.id ORDER BY b.position, b.name LIMIT 100"
             )
         ]
         sections = [
@@ -350,7 +381,7 @@ def state_command(_: argparse.Namespace) -> None:
                 "FROM sections s LEFT JOIN notes n ON n.section_id = s.id "
                 "LEFT JOIN feed_queue q ON q.note_id = n.id "
                 "WHERE s.bucket_id = ? GROUP BY s.id "
-                "ORDER BY s.position, s.name",
+                "ORDER BY s.position, s.name LIMIT 200",
                 (selected,),
             )
         ]
@@ -364,11 +395,11 @@ def state_command(_: argparse.Namespace) -> None:
                 "sent": bool(row["sent"]),
             }
             for row in db.execute(
-                "SELECT n.id, n.section_id, n.text, n.position, n.created_at, "
+                "SELECT n.id, n.section_id, substr(n.text, 1, 8192) AS text, n.position, n.created_at, "
                 "q.delivered_at IS NOT NULL AS sent FROM notes n "
                 "LEFT JOIN feed_queue q ON q.note_id = n.id "
                 "WHERE n.bucket_id = ? AND n.section_id = ? AND q.delivered_at IS NULL "
-                "ORDER BY n.position, n.created_at",
+                "ORDER BY n.position, n.created_at LIMIT 200",
                 (selected, selected_section),
             )
         ]
@@ -435,6 +466,8 @@ def add_bucket(args: argparse.Namespace) -> None:
     if len(name) > 40:
         raise SystemExit("feed-the-flock: bucket name must be at most 40 characters")
     with connect() as db:
+        if db.execute("SELECT COUNT(*) FROM buckets").fetchone()[0] >= 100:
+            raise ValueError("at most 100 buckets are supported")
         if db.execute("SELECT 1 FROM buckets WHERE name = ? COLLATE NOCASE", (name,)).fetchone():
             raise SystemExit(f"feed-the-flock: bucket already exists: {name}")
         stem = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "bucket"
@@ -618,6 +651,10 @@ def add_section(args: argparse.Namespace) -> None:
         if not db.execute("SELECT 1 FROM buckets WHERE id = ?", (bucket_id,)).fetchone():
             raise ValueError("bucket no longer exists")
         if db.execute(
+            "SELECT COUNT(*) FROM sections WHERE bucket_id = ?", (bucket_id,)
+        ).fetchone()[0] >= 200:
+            raise ValueError("at most 200 sections per bucket are supported")
+        if db.execute(
             "SELECT 1 FROM sections WHERE bucket_id = ? AND name = ? COLLATE NOCASE",
             (bucket_id, name),
         ).fetchone():
@@ -767,9 +804,9 @@ def move_section(args: argparse.Namespace) -> None:
 
 
 def add_note_to_db(db: sqlite3.Connection, bucket_id: str, text: str, section_id: str | None = None) -> str:
-    text = text.strip()
-    if not text:
-        raise ValueError("note text cannot be empty")
+    text = checked_note_text(text)
+    if db.execute("SELECT COUNT(*) FROM notes WHERE bucket_id = ?", (bucket_id,)).fetchone()[0] >= 2000:
+        raise ValueError("at most 2,000 notes per bucket are supported")
     section_id = section_id or ensure_unsorted_section(db, bucket_id)
     position = db.execute(
         "SELECT COALESCE(MAX(position), -1) + 1 FROM notes WHERE section_id = ?", (section_id,)
@@ -797,9 +834,7 @@ def add_note(args: argparse.Namespace) -> None:
 
 
 def update_note(args: argparse.Namespace) -> None:
-    text = args.text.strip()
-    if not text:
-        raise SystemExit("feed-the-flock: note text cannot be empty")
+    text = checked_note_text(args.text)
     with connect() as db:
         changed = db.execute("UPDATE notes SET text = ? WHERE id = ?", (text, args.note_id)).rowcount
         if not changed:
