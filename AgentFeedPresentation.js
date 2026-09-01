@@ -28,8 +28,3 @@ function tooltip(value, count) {
   default: return "Feed the Flock · " + Number(count || 0) + " queued notes"
   }
 }
-
-function warning(actionError, stateError) {
-  var action = String(actionError || "")
-  return action !== "" ? action : String(stateError || "")
-}

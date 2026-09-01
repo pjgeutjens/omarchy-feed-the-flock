@@ -33,26 +33,12 @@ else:
 
 snapshot = json.dumps({"result": {"snapshot": {
     "tabs": [{"tab_id": "w1:t1", "label": "Work <b>"}],
-    "agents": [{"pane_id": "w1:p1", "tab_id": "w1:t1", "agent": "omp", "agent_status": "idle"}],
+    "agents": [{"pane_id": "w1:p1", "tab_id": "w1:t1", "agent": "pi", "agent_status": "working"}],
 }}}).encode()
 targets = parse_herdr_targets(snapshot)
 assert targets[0]["id"] == "herdr:w1:p1"
 assert targets[0]["available"] is False
-assert targets[0]["status"] == "untracked"
-assert targets[0]["rawStatus"] == "idle"
-assert "herdr integration install omp" in targets[0]["waitError"]
 assert "<" not in targets[0]["label"]
-
-tracked_snapshot = json.dumps({"result": {"snapshot": {
-    "tabs": [],
-    "agents": [{
-        "pane_id": "w1:p2", "agent": "omp", "agent_status": "idle", "state_change_seq": 42,
-        "agent_session": {"source": "herdr:omp", "value": "session-id"},
-    }],
-}}}).encode()
-tracked = parse_herdr_targets(tracked_snapshot)[0]
-assert tracked["available"] is True
-assert tracked["stateChangeSeq"] == 42
 
 try:
     run_bounded([sys.executable, "-c", "import time; time.sleep(30)"], timeout=0.1)

@@ -11,7 +11,7 @@ export AGENT_FEED_DISABLE_WORKER=1 AGENT_FEED_HERDR="$tmp/herdr"
 cat >"$tmp/herdr" <<'EOF'
 #!/usr/bin/env bash
 if [[ ${1:-} == api && ${2:-} == snapshot ]]; then
-  printf '%s\n' '{"id":"test","result":{"type":"session_snapshot","tabs":[{"tab_id":"w1:t2","label":"review"}],"agents":[{"agent":"pi","agent_status":"idle","state_change_seq":1,"agent_session":{"agent":"pi","kind":"id","source":"herdr:pi","value":"test-session"},"cwd":"/tmp/project","pane_id":"w1:p2","tab_id":"w1:t2","terminal_title_stripped":"project"}]}}'
+  printf '%s\n' '{"id":"test","result":{"type":"session_snapshot","tabs":[{"tab_id":"w1:t2","label":"review"}],"agents":[{"agent":"pi","agent_status":"idle","cwd":"/tmp/project","pane_id":"w1:p2","tab_id":"w1:t2","terminal_title_stripped":"project"}]}}'
 fi
 EOF
 chmod +x "$tmp/herdr"

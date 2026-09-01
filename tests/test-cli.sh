@@ -21,13 +21,7 @@ cat >"$tmp/herdr" <<'EOF'
 #!/usr/bin/env bash
 if [[ ${1:-} == api && ${2:-} == snapshot ]]; then
   status=${FAKE_HERDR_STATUS:-idle}
-  seq=${FAKE_HERDR_SEQ:-1}
-  agent=${FAKE_HERDR_AGENT:-pi}
-  session=""
-  if [[ ${FAKE_HERDR_TRACKED:-1} == 1 ]]; then
-    session=",\"agent_session\":{\"agent\":\"$agent\",\"kind\":\"id\",\"source\":\"herdr:$agent\",\"value\":\"test-session\"}"
-  fi
-  printf '%s\n' "{\"id\":\"test\",\"result\":{\"type\":\"session_snapshot\",\"tabs\":[{\"tab_id\":\"w1:t2\",\"label\":\"review\"}],\"agents\":[{\"agent\":\"$agent\",\"agent_status\":\"$status\",\"state_change_seq\":$seq$session,\"cwd\":\"/tmp/project\",\"pane_id\":\"w1:p2\",\"tab_id\":\"w1:t2\",\"terminal_title_stripped\":\"project\"}]}}"
+  printf '%s\n' "{\"id\":\"test\",\"result\":{\"type\":\"session_snapshot\",\"tabs\":[{\"tab_id\":\"w1:t2\",\"label\":\"review\"}],\"agents\":[{\"agent\":\"pi\",\"agent_status\":\"$status\",\"cwd\":\"/tmp/project\",\"pane_id\":\"w1:p2\",\"tab_id\":\"w1:t2\",\"terminal_title_stripped\":\"project\"}]}}"
 elif [[ ${1:-} == agent && ${2:-} == prompt ]]; then
   printf '%s\n' "$@" >"$FAKE_HERDR_LOG"
   printf '%s\n' '{"id":"test","result":{"type":"agent_prompt"}}'
@@ -36,8 +30,7 @@ else
 fi
 EOF
 chmod +x "$tmp/herdr"
-export AGENT_FEED_HERDR="$tmp/herdr" FAKE_HERDR_LOG="$tmp/herdr.log" AGENT_FEED_DISABLE_WORKER=1
-export FAKE_HERDR_STATUS=idle FAKE_HERDR_SEQ=1 FAKE_HERDR_AGENT=pi FAKE_HERDR_TRACKED=1
+export AGENT_FEED_HERDR="$tmp/herdr" FAKE_HERDR_LOG="$tmp/herdr.log" AGENT_FEED_DISABLE_WORKER=1 FAKE_HERDR_STATUS=idle
 cli="$root/bin/feed-the-flock"
 
 "$cli" init
@@ -118,22 +111,9 @@ jq -e --arg section "$interface_section" \
 "$cli" note add "Animate incoming notes"
 state=$("$cli" state)
 work_note=$(jq -r '.notes[0].id' <<< "$state")
-sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
-  "UPDATE settings SET value = 'clipboard' WHERE key = 'delivery_target';
-   UPDATE settings SET value = 'Clipboard' WHERE key = 'delivery_target_label';"
 targets=$("$cli" targets)
 jq -e '.targets[] | select(.id == "herdr:w1:p2")
   | .available == true and .label == "pi · review"' <<< "$targets" >/dev/null
-jq -e '
-  .selectedTargetId == "" and .selectedTargetLabel == "Select an agent target"
-  and ([.targets[].id] | index("clipboard")) == null
-' <<< "$targets" >/dev/null
-[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
-  "SELECT value FROM settings WHERE key = 'delivery_target'") == "" ]]
-if "$cli" target select clipboard >/dev/null 2>&1; then
-  echo "clipboard unexpectedly remained a delivery target" >&2
-  exit 1
-fi
 "$cli" target select herdr:w1:p2
 jq -e '.selectedTargetId == "herdr:w1:p2" and .selectedTargetLabel == "pi · review"' \
   <<< "$("$cli" targets)" >/dev/null

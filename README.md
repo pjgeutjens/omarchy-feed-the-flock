@@ -25,7 +25,6 @@ Requirements:
 - Python 3.11 or newer
 - [Voxtype](https://github.com/peteonrails/voxtype) for voice capture
 - [Herdr](https://github.com/pjgeutjens/herdr) for agent discovery and delivery
-  Install the lifecycle integration for each target harness, for example `herdr integration install omp`. Wait-mode feeding rejects untracked agents rather than risk steering an active turn.
 - `wl-clipboard` for ordered image delivery
 - `zenity` for the widget's Markdown import file picker
 - `libnotify` for notifications
@@ -69,7 +68,7 @@ For development from this repository, use `./scripts/install-local.sh`. Do not r
 
 ## Herdr delivery
 
-Feed the Flock discovers agents from the default running Herdr session. Choose the delivery target with the compact dropdown in the plugin (or press `T` to open it), and the feed submits notes through Herdr's `agent prompt` API according to the selected mode. The workspace displays the selected target and provides explicit note- and section-level Feed Now actions. A new installation starts with no delivery target; manual copying remains available from the workspace but is not presented as an agent target. Wait-mode delivery requires a lifecycle-tracked Herdr agent and releases each next note only after Herdr records a newer lifecycle transition back to idle or done.
+Feed the Flock discovers agents from the default running Herdr session. Choose the delivery target with the compact dropdown in the plugin (or press `T` to open it), and the feed submits notes through Herdr's `agent prompt` API according to the selected mode. The workspace displays the selected target and provides explicit note- and section-level Feed Now actions. Clipboard remains the default; delivery is accepted only when the selected Herdr agent is idle or done.
 
 Press `R` to connect a read-only remote feeder. The endpoint field accepts an SSH hostname, IP, alias, or `user@host` and is prefilled from a running `herdr --remote` client when available. Both devices must have a compatible Feed the Flock version installed and batch SSH authentication must already work. Remote mode reuses the normal bucket and section trains, exposes pending notes through the notes overlay, and opens a read-only HTML workspace containing remote buckets, sections, note history, and attachment counts. Copying note text remains available; capture, feeding, CRUD, reordering, transfer, and attachment mutation are blocked. Queries use fixed, versioned plugin commands with strict endpoint validation, timeouts, output limits, and no direct access to the remote SQLite file. Disconnect with `R` to return to the untouched local view.
 

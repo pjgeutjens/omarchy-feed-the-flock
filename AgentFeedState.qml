@@ -3,7 +3,6 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "AgentFeedPresentation.js" as Presentation
 
 Item {
   id: root
@@ -26,7 +25,6 @@ Item {
   property string captureBucketName: ""
   property string captureSectionName: ""
   property string lastError: ""
-  readonly property string warningMessage: Presentation.warning(lastError, error)
   property string activeBucketId: "inbox"
   property string activeSectionId: ""
   property string feedBucketId: ""
@@ -42,8 +40,8 @@ Item {
   property var sections: []
   property var notes: []
   property var deliveryTargets: []
-  property string selectedDeliveryTargetId: ""
-  property string selectedDeliveryTargetLabel: "Select an agent target"
+  property string selectedDeliveryTargetId: "clipboard"
+  property string selectedDeliveryTargetLabel: "Clipboard"
   property string deliveryMode: "idle-active-next"
   property bool feedEnabled: false
   property int pendingCount: 0
@@ -82,7 +80,6 @@ Item {
       .replace(/\s+/g, " ").trim()
     return text.length > 240 ? text.substring(0, 237) + "…" : text
   }
-  function dismissLastError() { root.lastError = "" }
 
   function refresh() {
     if (!root.installed || stateProcess.running) return
@@ -129,6 +126,7 @@ Item {
       root.sections = value.sections
       root.notes = value.notes
       root.totalCount = Number(value.totalCount || 0)
+      root.lastError = ""
       root.initialized = true
     } catch (failure) {
       root.lastError = "Could not read Feed the Flock state: " + root.cleanError(failure)
@@ -151,7 +149,7 @@ Item {
       root.deliveryTargets = value.targets
       root.suggestedRemoteEndpoint = String(value.suggestedRemoteEndpoint || "")
       root.selectedDeliveryTargetId = value.selectedTargetId
-      root.selectedDeliveryTargetLabel = String(value.selectedTargetLabel || "Select an agent target")
+      root.selectedDeliveryTargetLabel = String(value.selectedTargetLabel || "Clipboard")
     } catch (failure) {
       root.lastError = "Could not read Herdr targets: " + root.cleanError(failure)
     }

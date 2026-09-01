@@ -27,7 +27,6 @@ Panel {
   readonly property color dimForeground: Qt.darker(contentForeground, 1.5)
   readonly property color urgentForeground: bar ? bar.urgent : Color.error
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property string iconFontFamily: "JetBrainsMono Nerd Font"
 
   function open() { root.controller.show() }
   function close() { root.controller.hide() }
@@ -108,7 +107,7 @@ Panel {
     var values = AgentFeedCore.AgentFeedState.deliveryTargets
     for (var i = 0; i < values.length; i++)
       if (values[i].id === AgentFeedCore.AgentFeedState.selectedDeliveryTargetId) return i
-    return -1
+    return 0
   }
 
   function openDeliveryTargetPicker() {
@@ -270,7 +269,7 @@ Panel {
   Component {
     id: feedIcon
     Text {
-      text: AgentFeedCore.AgentFeedState.recording ? "󰕽" : "󰆚"
+      text: AgentFeedCore.AgentFeedState.recording ? "󰕽" : "󰳆"
       textFormat: Text.PlainText
       color: AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : root.contentForeground
       font.family: root.contentFontFamily
@@ -381,56 +380,16 @@ Panel {
             fontFamily: root.contentFontFamily
           }
 
-          BorderSurface {
-            id: warningSurface
-            visible: AgentFeedCore.AgentFeedState.warningMessage !== ""
+          Text {
+            visible: AgentFeedCore.AgentFeedState.lastError !== "" || AgentFeedCore.AgentFeedState.error !== ""
             width: parent.width
-            implicitHeight: warningCopy.implicitHeight + Style.space(16)
-            color: Util.alpha(root.urgentForeground, 0.08)
-            borderSpec: Border.flat(root.urgentForeground, Style.normalBorderWidth)
-            radius: Style.cornerRadius
-
-            Column {
-              id: warningCopy
-              anchors.left: parent.left
-              anchors.right: warningDismiss.visible ? warningDismiss.left : parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(8)
-              anchors.rightMargin: Style.space(8)
-              spacing: Style.space(2)
-
-              Text {
-                width: parent.width
-                text: "ACTION NEEDED"
-                textFormat: Text.PlainText
-                color: root.urgentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-              }
-              Text {
-                width: parent.width
-                text: AgentFeedCore.AgentFeedState.warningMessage
-                textFormat: Text.PlainText
-                color: root.contentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                wrapMode: Text.WordWrap
-              }
-            }
-
-            PanelActionButton {
-              id: warningDismiss
-              visible: AgentFeedCore.AgentFeedState.lastError !== ""
-              anchors.right: parent.right
-              anchors.rightMargin: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: "×"
-              tooltipText: "Dismiss warning"
-              foreground: root.urgentForeground
-              fontFamily: root.contentFontFamily
-              onClicked: AgentFeedCore.AgentFeedState.dismissLastError()
-            }
+            text: AgentFeedCore.AgentFeedState.lastError !== ""
+              ? AgentFeedCore.AgentFeedState.lastError : AgentFeedCore.AgentFeedState.error
+            textFormat: Text.PlainText
+            color: root.urgentForeground
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
           }
 
           BorderSurface {
@@ -466,48 +425,48 @@ Panel {
               visible: !AgentFeedCore.AgentFeedState.remoteMode
               spacing: Style.space(2)
               PanelActionButton {
-                iconText: "󰅁" // nf-md-chevron_left
+                iconText: "‹"
                 tooltipText: "Move active bucket left"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: AgentFeedCore.AgentFeedState.moveBucket(
                   AgentFeedCore.AgentFeedState.activeBucketId, "left")
               }
               PanelActionButton {
-                iconText: "󰅂" // nf-md-chevron_right
+                iconText: "›"
                 tooltipText: "Move active bucket right"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: AgentFeedCore.AgentFeedState.moveBucket(
                   AgentFeedCore.AgentFeedState.activeBucketId, "right")
               }
               PanelActionButton {
-                iconText: "󰋺" // nf-md-import
+                iconText: "⇧"
                 tooltipText: "Import Markdown bucket (I)"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: AgentFeedCore.AgentFeedState.importBucket()
               }
               PanelActionButton {
-                iconText: "󰈇" // nf-md-export
+                iconText: "⇩"
                 tooltipText: "Export active bucket to Downloads (X)"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: AgentFeedCore.AgentFeedState.exportBucket(
                   AgentFeedCore.AgentFeedState.activeBucketId)
               }
               PanelActionButton {
-                iconText: "󰏫" // nf-md-pencil
+                iconText: "✎"
                 tooltipText: "Rename active bucket"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: root.beginRenameBucket()
               }
               PanelActionButton {
-                iconText: "󰅖" // nf-md-close
+                iconText: "×"
                 tooltipText: "Delete active bucket"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: AgentFeedCore.AgentFeedState.deleteBucket(
                   AgentFeedCore.AgentFeedState.activeBucketId)
               }
@@ -592,11 +551,11 @@ Panel {
               visible: !AgentFeedCore.AgentFeedState.remoteMode
               spacing: Style.space(2)
               PanelActionButton {
-                iconText: "󰐕" // nf-md-plus
+                iconText: "+"
                 tooltipText: "Add active section to feed queue (G)"
                 foreground: root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) >= 0
                   ? Color.accent : root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 enabled: AgentFeedCore.AgentFeedState.activeSectionId
                   !== AgentFeedCore.AgentFeedState.feedSectionId
                   && root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) < 0
@@ -604,41 +563,41 @@ Panel {
                   AgentFeedCore.AgentFeedState.activeSectionId)
               }
               PanelActionButton {
-                iconText: "󱐋" // nf-md-lightning_bolt
+                iconText: "󱐋"
                 tooltipText: "Switch feed to active section now (Shift+G)"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: "JetBrainsMono Nerd Font"
                 enabled: AgentFeedCore.AgentFeedState.activeSectionId
                   !== AgentFeedCore.AgentFeedState.feedSectionId
                 onClicked: AgentFeedCore.AgentFeedState.selectFeedSectionNow(
                   AgentFeedCore.AgentFeedState.activeSectionId)
               }
               PanelActionButton {
-                iconText: "󰅁" // nf-md-chevron_left
+                iconText: "‹"
                 tooltipText: "Move active section left"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: root.moveActiveSectionOrder("left")
               }
               PanelActionButton {
-                iconText: "󰅂" // nf-md-chevron_right
+                iconText: "›"
                 tooltipText: "Move active section right"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: root.moveActiveSectionOrder("right")
               }
               PanelActionButton {
-                iconText: "󰏫" // nf-md-pencil
+                iconText: "✎"
                 tooltipText: "Rename active section"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 onClicked: root.beginRenameSection()
               }
               PanelActionButton {
-                iconText: "󰅖" // nf-md-close
+                iconText: "×"
                 tooltipText: "Delete active section; notes move to Unsorted"
                 foreground: root.dimForeground
-                fontFamily: root.iconFontFamily
+                fontFamily: root.contentFontFamily
                 enabled: !root.selectedSectionIsFallback()
                 onClicked: root.beginDeleteSection()
               }
