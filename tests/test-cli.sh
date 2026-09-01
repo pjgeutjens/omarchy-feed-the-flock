@@ -118,9 +118,22 @@ jq -e --arg section "$interface_section" \
 "$cli" note add "Animate incoming notes"
 state=$("$cli" state)
 work_note=$(jq -r '.notes[0].id' <<< "$state")
+sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+  "UPDATE settings SET value = 'clipboard' WHERE key = 'delivery_target';
+   UPDATE settings SET value = 'Clipboard' WHERE key = 'delivery_target_label';"
 targets=$("$cli" targets)
 jq -e '.targets[] | select(.id == "herdr:w1:p2")
   | .available == true and .label == "pi · review"' <<< "$targets" >/dev/null
+jq -e '
+  .selectedTargetId == "" and .selectedTargetLabel == "Select an agent target"
+  and ([.targets[].id] | index("clipboard")) == null
+' <<< "$targets" >/dev/null
+[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+  "SELECT value FROM settings WHERE key = 'delivery_target'") == "" ]]
+if "$cli" target select clipboard >/dev/null 2>&1; then
+  echo "clipboard unexpectedly remained a delivery target" >&2
+  exit 1
+fi
 "$cli" target select herdr:w1:p2
 jq -e '.selectedTargetId == "herdr:w1:p2" and .selectedTargetLabel == "pi · review"' \
   <<< "$("$cli" targets)" >/dev/null

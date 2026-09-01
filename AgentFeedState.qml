@@ -42,8 +42,8 @@ Item {
   property var sections: []
   property var notes: []
   property var deliveryTargets: []
-  property string selectedDeliveryTargetId: "clipboard"
-  property string selectedDeliveryTargetLabel: "Clipboard"
+  property string selectedDeliveryTargetId: ""
+  property string selectedDeliveryTargetLabel: "Select an agent target"
   property string deliveryMode: "idle-active-next"
   property bool feedEnabled: false
   property int pendingCount: 0
@@ -151,7 +151,7 @@ Item {
       root.deliveryTargets = value.targets
       root.suggestedRemoteEndpoint = String(value.suggestedRemoteEndpoint || "")
       root.selectedDeliveryTargetId = value.selectedTargetId
-      root.selectedDeliveryTargetLabel = String(value.selectedTargetLabel || "Clipboard")
+      root.selectedDeliveryTargetLabel = String(value.selectedTargetLabel || "Select an agent target")
     } catch (failure) {
       root.lastError = "Could not read Herdr targets: " + root.cleanError(failure)
     }

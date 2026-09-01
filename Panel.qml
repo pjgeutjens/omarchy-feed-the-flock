@@ -107,7 +107,7 @@ Panel {
     var values = AgentFeedCore.AgentFeedState.deliveryTargets
     for (var i = 0; i < values.length; i++)
       if (values[i].id === AgentFeedCore.AgentFeedState.selectedDeliveryTargetId) return i
-    return 0
+    return -1
   }
 
   function openDeliveryTargetPicker() {
