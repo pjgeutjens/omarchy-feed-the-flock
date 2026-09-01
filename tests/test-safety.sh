@@ -39,6 +39,7 @@ targets = parse_herdr_targets(snapshot)
 assert targets[0]["id"] == "herdr:w1:p1"
 assert targets[0]["available"] is False
 assert targets[0]["status"] == "untracked"
+assert targets[0]["rawStatus"] == "idle"
 assert "herdr integration install omp" in targets[0]["waitError"]
 assert "<" not in targets[0]["label"]
 

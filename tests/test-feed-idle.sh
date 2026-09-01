@@ -91,4 +91,7 @@ if "$cli" feed start >"$tmp/untracked.out" 2>"$tmp/untracked.err"; then
   exit 1
 fi
 grep -Fq 'herdr integration install omp' "$tmp/untracked.err"
+untracked_note=$("$cli" state | jq -r '.notes[] | select(.text == "must remain pending") | .id')
+"$cli" deliver "$untracked_note" --force | jq -e '.ok == true' >/dev/null
+wait_for_prompt_count 5
 [[ $("$cli" state | jq -r .feedEnabled) == false ]]

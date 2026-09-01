@@ -83,6 +83,7 @@ def parse_herdr_targets(output: bytes) -> list[dict[str, object]]:
             "agent": name,
             "label": f"{name} · {context}",
             "status": status,
+            "rawStatus": raw_status,
             "available": lifecycle_tracked and status in {"idle", "done"},
             "lifecycleTracked": lifecycle_tracked,
             "stateChangeSeq": state_change_seq,
@@ -668,8 +669,9 @@ def deliver_note(
     if not target:
         raise ValueError("Herdr agent is no longer available")
     if force_working:
-        if target["status"] not in {"idle", "done", "working"}:
-            raise ValueError(f"Herdr agent is {target['status']}; prompt injection is unavailable")
+        raw_status = str(target.get("rawStatus", target["status"]))
+        if raw_status not in {"idle", "done", "working"}:
+            raise ValueError(f"Herdr agent is {raw_status}; prompt injection is unavailable")
     elif not target["available"]:
         message = str(target.get("waitError") or f"Herdr agent is {target['status']}; wait until it is idle")
         raise ValueError(message)
