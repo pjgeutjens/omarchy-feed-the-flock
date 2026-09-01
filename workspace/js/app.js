@@ -15,7 +15,7 @@ const targetNameEl = document.querySelector('#target-name');
 const feedQueueEl = document.querySelector('#feed-queue-list');
 const feedToggleEl = document.querySelector('#feed-toggle');
 const bucketTrainEl = document.querySelector('#bucket-train');
-let selectedTargetId = 'clipboard';
+let selectedTargetId = '';
 let activeNoteIds = [];
 let currentDocument = null;
 let draggingId = null;
@@ -202,7 +202,7 @@ function updateActiveNotes() {
 async function loadTargets() {
   try {
     const data = await request('/api/targets');
-    selectedTargetId = data.selectedTargetId || 'clipboard';
+    selectedTargetId = data.selectedTargetId || '';
     activeNoteIds = data.activeNoteIds || [];
     updateActiveNotes();
     const selected = (data.targets || []).find(target => target.id === selectedTargetId);

@@ -101,15 +101,16 @@ def herdr_targets() -> tuple[list[dict[str, object]], str]:
 
 def targets_payload() -> dict[str, object]:
     targets, error = herdr_targets()
-    all_targets = [
-        {"id": "clipboard", "kind": "clipboard", "label": "Clipboard", "status": "ready", "available": True},
-        *targets,
-    ]
+    all_targets = targets
     with connect() as db:
-        selected_id = setting(db, "delivery_target", "clipboard")
-        stored_label = setting(db, "delivery_target_label", "Clipboard")
+        selected_id = setting(db, "delivery_target", "")
+        stored_label = setting(db, "delivery_target_label", "Target unavailable")
         current = next((target for target in all_targets if target["id"] == selected_id), None)
-        selected_label = str(current["label"]) if current else stored_label
+        selected_label = (
+            str(current["label"]) if current
+            else stored_label if selected_id
+            else "Target unavailable"
+        )
         changed = False
         if selected_label != stored_label:
             set_setting(db, "delivery_target_label", selected_label)
@@ -350,7 +351,7 @@ def feed_control(args: argparse.Namespace) -> None:
             requested = enabled
         else:
             requested = args.action == "start"
-        if requested and setting(db, "delivery_target", "clipboard") == "clipboard":
+        if requested and not setting(db, "delivery_target", "").startswith("herdr:"):
             raise ValueError("select a Herdr target before starting the feed")
         if requested and not enabled and args.action != "resume":
             bucket_id = str(getattr(args, "bucket_id", "") or active_bucket(db))
@@ -553,9 +554,7 @@ def deliver_note(
 ) -> dict[str, object]:
     if not target_id:
         with connect() as db:
-            target_id = setting(db, "delivery_target", "clipboard")
-    if target_id == "clipboard":
-        raise ValueError("clipboard delivery happens in the workspace")
+            target_id = setting(db, "delivery_target", "")
     if not target_id.startswith("herdr:"):
         raise ValueError("unsupported delivery target")
     targets, error = herdr_targets()
@@ -666,7 +665,7 @@ def feed_worker(_: argparse.Namespace) -> None:
                     notes = []
                 else:
                     should_pause = False
-                    target_id = setting(db, "delivery_target", "clipboard")
+                    target_id = setting(db, "delivery_target", "")
                     mode = setting(db, "delivery_mode", "idle-active-next")
                     queue_order = setting(db, "queue_order", "fifo")
                     current_bucket_id, current_section_id = feed_destination(db)
@@ -700,7 +699,7 @@ def feed_worker(_: argparse.Namespace) -> None:
             if should_pause:
                 time.sleep(0.25)
                 continue
-            if target_id == "clipboard" or not notes:
+            if not target_id or not notes:
                 time.sleep(0.75)
                 continue
             targets, error = herdr_targets()

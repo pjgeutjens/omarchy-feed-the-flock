@@ -32,8 +32,8 @@ Item {
   property var sections: []
   property var notes: []
   property var deliveryTargets: []
-  property string selectedDeliveryTargetId: "clipboard"
-  property string selectedDeliveryTargetLabel: "Clipboard"
+  property string selectedDeliveryTargetId: ""
+  property string selectedDeliveryTargetLabel: "Target unavailable"
   property string deliveryMode: "idle-active-next"
   property bool feedEnabled: false
   property int pendingCount: 0
@@ -128,7 +128,7 @@ Item {
         throw new Error("unexpected target shape")
       root.deliveryTargets = value.targets
       root.selectedDeliveryTargetId = value.selectedTargetId
-      root.selectedDeliveryTargetLabel = String(value.selectedTargetLabel || "Clipboard")
+      root.selectedDeliveryTargetLabel = String(value.selectedTargetLabel || "Target unavailable")
     } catch (failure) {
       root.lastError = "Could not read Herdr targets: " + root.cleanError(failure)
     }

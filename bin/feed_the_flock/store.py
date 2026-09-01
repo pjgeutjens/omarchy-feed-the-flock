@@ -169,8 +169,19 @@ def _open_connection() -> sqlite3.Connection:
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('phase', 'idle')")
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('phase_at', '0')")
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('error', '')")
-    db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('delivery_target', 'clipboard')")
-    db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('delivery_target_label', 'Clipboard')")
+    db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('delivery_target', '')")
+    db.execute(
+        "INSERT OR IGNORE INTO settings(key, value) VALUES "
+        "('delivery_target_label', 'Target unavailable')"
+    )
+    db.execute(
+        "UPDATE settings SET value = '' WHERE key = 'delivery_target' AND value = 'clipboard'"
+    )
+    db.execute(
+        "UPDATE settings SET value = 'Target unavailable' "
+        "WHERE key = 'delivery_target_label' AND value = 'Clipboard' "
+        "AND (SELECT value FROM settings WHERE key = 'delivery_target') = ''"
+    )
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('delivery_mode', 'idle-active-next')")
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('feed_enabled', '0')")
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('queue_order', 'fifo')")

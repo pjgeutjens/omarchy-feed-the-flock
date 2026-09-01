@@ -56,6 +56,10 @@ after_fds=$(find "/proc/$server/fd" -maxdepth 1 -type l | wc -l)
   exit 1
 }
 
+curl -fsS http://127.0.0.1:47832/api/targets \
+  | jq -e '.selectedTargetId == "herdr:w1:p2"
+    and ([.targets[].id] | index("clipboard")) == null
+    and ([.targets[].kind] | all(. == "herdr"))' >/dev/null
 [[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' \
   http://127.0.0.1:47832/api/buckets) == 400 ]]
 [[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' \

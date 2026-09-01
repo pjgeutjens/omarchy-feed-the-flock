@@ -36,6 +36,27 @@ cli="$root/bin/feed-the-flock"
 "$cli" init
 state=$("$cli" state)
 jq -e '.activeBucketId == "inbox" and (.buckets | length) == 3 and .totalCount == 0' <<< "$state" >/dev/null
+targets=$("$cli" targets)
+jq -e '.selectedTargetId == "" and .selectedTargetLabel == "Target unavailable"
+  and ([.targets[].kind] | all(. == "herdr"))
+  and ([.targets[].id] | index("clipboard")) == null' <<< "$targets" >/dev/null
+if "$cli" target select clipboard >/dev/null 2>&1; then
+  echo "clipboard was accepted as a delivery target" >&2
+  exit 1
+fi
+python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+import sqlite3
+import sys
+with sqlite3.connect(sys.argv[1]) as db:
+    db.execute("UPDATE settings SET value = 'clipboard' WHERE key = 'delivery_target'")
+    db.execute("UPDATE settings SET value = 'Clipboard' WHERE key = 'delivery_target_label'")
+PY
+jq -e '.selectedTargetId == "" and .selectedTargetLabel == "Target unavailable"' \
+  <<< "$("$cli" targets)" >/dev/null
+if "$cli" feed start >/dev/null 2>&1; then
+  echo "feed started without a Herdr target" >&2
+  exit 1
+fi
 
 oversized_note=$(python3 -c 'print("x" * 65537, end="")')
 if "$cli" note add "$oversized_note" >/dev/null 2>&1; then
