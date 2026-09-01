@@ -43,6 +43,12 @@ grep -Fq 'targetPicker.popupOpen || modePicker.popupOpen || orderPicker.popupOpe
     echo "Panel key handling must pause while a routing dropdown is open" >&2
     exit 1
   }
+grep -Fq '"hint": "oldest pending first"' "$plugin_dir/AgentFeedState.qml"
+grep -Fq '"hint": "newest pending first"' "$plugin_dir/AgentFeedState.qml"
+if grep -Eiq 'topmost|bottommost' "$plugin_dir/AgentFeedState.qml"; then
+  echo "queue-order hints still use visual-position terminology" >&2
+  exit 1
+fi
 for asset in styles/theme.css styles/controls.css styles/overlays.css styles/document.css \
              styles/notes.css styles/responsive.css js/app.js; do
   grep -Fq "\"/$asset\"" "$plugin_dir/workspace/index.html" || {

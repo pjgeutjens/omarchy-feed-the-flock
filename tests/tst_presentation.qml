@@ -22,12 +22,12 @@ TestCase {
     compare(targets[0].description, "Herdr · idle")
 
     var modes = Presentation.hintedDropdownOptions([
-      { "id": "fifo", "label": "FIFO", "hint": "oldest unsent first" }
+      { "id": "fifo", "label": "FIFO", "hint": "oldest pending first" }
     ])
     compare(modes.length, 1)
     compare(modes[0].value, "fifo")
     compare(modes[0].label, "FIFO")
-    compare(modes[0].description, "oldest unsent first")
+    compare(modes[0].description, "oldest pending first")
   }
 
   function test_idleTooltip() {

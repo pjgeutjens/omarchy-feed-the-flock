@@ -39,8 +39,8 @@ Item {
   property int pendingCount: 0
   property string queueOrder: "fifo"
   readonly property var queueOrders: [
-    { "id": "fifo", "label": "FIFO", "hint": "topmost unsent first" },
-    { "id": "lifo", "label": "LIFO", "hint": "bottommost unsent first" }
+    { "id": "fifo", "label": "FIFO", "hint": "oldest pending first" },
+    { "id": "lifo", "label": "LIFO", "hint": "newest pending first" }
   ]
   readonly property var deliveryModes: [
     { "id": "idle-active-next", "label": "Section · One by one", "hint": "one note from the active section per idle turn" },
