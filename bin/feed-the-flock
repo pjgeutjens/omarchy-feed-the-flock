@@ -25,6 +25,7 @@ from feed_the_flock.store import (
     add_note,
     add_section,
     connect,
+    clear_section,
     delete_bucket,
     delete_note,
     delete_section,
@@ -208,6 +209,10 @@ def parser() -> argparse.ArgumentParser:
     section_rename.add_argument("section_id")
     section_rename.add_argument("name")
     section_rename.set_defaults(func=rename_section)
+    section_clear = section_commands.add_parser("clear")
+    section_clear.add_argument("section_id")
+    section_clear.add_argument("--confirm", required=True, metavar="SECTION_ID")
+    section_clear.set_defaults(func=clear_section)
     section_delete = section_commands.add_parser("delete")
     section_delete.add_argument("section_id")
     section_delete.add_argument("--notes", choices=("move", "discard"), default="move")

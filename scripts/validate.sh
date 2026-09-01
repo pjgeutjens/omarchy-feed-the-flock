@@ -74,6 +74,7 @@ if grep -Fq 'elide: Text.ElideRight' "$plugin_dir/KeybindingsOverlay.qml"; then
 fi
 bash -n "$plugin_dir/scripts/manage-binding.sh" "$plugin_dir/scripts/prepare-remove.sh"
 "$plugin_dir/tests/test-cli.sh"
+"$plugin_dir/tests/test-clear-section.sh"
 "$plugin_dir/tests/test-bindings.sh"
 "$plugin_dir/tests/test-safety.sh"
 "$plugin_dir/tests/test-attachments.sh"

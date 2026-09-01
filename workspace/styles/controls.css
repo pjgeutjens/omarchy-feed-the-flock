@@ -56,7 +56,7 @@ h1 { margin: 4px 0 0; font-size: clamp(32px, 5vw, 52px); line-height: 1.1; lette
   display: inline-grid; width: 27px; height: 27px; padding: 0;
   place-items: center; font-size: 14px; line-height: 1;
 }
-.section-action.delete:hover, .bucket-action.delete:hover { color: var(--danger); }
+.section-action.clear:hover, .section-action.delete:hover, .bucket-action.delete:hover { color: var(--danger); }
 .section-action.queue-add.active { color: var(--accent); }
 .section-action.feed-now { color: var(--muted); }
 .section-action.feed-now .bolt-icon {

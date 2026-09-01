@@ -25,7 +25,7 @@ function closeModal(value) {
   if (resolve) resolve(value);
 }
 
-function showModal({ title: heading, message: detail = '', value = '', input: wantsInput = false,
+export function showModal({ title: heading, message: detail = '', value = '', input: wantsInput = false,
                      confirmLabel = 'Confirm', danger = false, secondaryLabel = '',
                      maxLength = 50 }) {
   if (open) closeModal(null);

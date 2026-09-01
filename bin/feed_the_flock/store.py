@@ -5,13 +5,14 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from .common import DB_PATH, DEFAULT_BUCKETS, STATE_DIR
+from .common import ATTACHMENT_DIR, DB_PATH, DEFAULT_BUCKETS, STATE_DIR
 
 MAX_NOTE_BYTES = 64 * 1024
 
@@ -224,8 +225,29 @@ def remove_note_attachments(db: sqlite3.Connection, note_ids: list[str]) -> list
 
 
 def unlink_attachment_files(paths: list[Path]) -> None:
-    for path in paths:
-        path.unlink(missing_ok=True)
+    if not paths:
+        return
+    try:
+        descriptor = os.open(
+            ATTACHMENT_DIR, os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+    except OSError:
+        return
+    try:
+        details = os.fstat(descriptor)
+        if not stat.S_ISDIR(details.st_mode) or details.st_uid != os.getuid():
+            return
+        managed_parent = ATTACHMENT_DIR.absolute()
+        for path in paths:
+            candidate = path.absolute()
+            if candidate.parent != managed_parent or candidate.name in {"", ".", ".."}:
+                continue
+            try:
+                os.unlink(candidate.name, dir_fd=descriptor)
+            except FileNotFoundError:
+                pass
+    finally:
+        os.close(descriptor)
 
 
 def setting(db: sqlite3.Connection, key: str, fallback: str = "") -> str:
@@ -714,6 +736,57 @@ def rename_section(args: argparse.Namespace) -> None:
             raise ValueError("section name already exists")
         db.execute("UPDATE sections SET name = ? WHERE id = ?", (name, args.section_id))
         db.commit()
+
+
+def clear_section_notes(section_id: str, confirmation: str) -> dict[str, object]:
+    if not section_id or confirmation != section_id:
+        raise ValueError("explicit section-clear confirmation does not match")
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        section = db.execute(
+            "SELECT id, name FROM sections WHERE id = ?", (section_id,)
+        ).fetchone()
+        if not section:
+            raise ValueError("section no longer exists")
+        note_ids = [
+            str(row[0]) for row in db.execute(
+                "SELECT id FROM notes WHERE section_id = ? ORDER BY position, created_at",
+                (section_id,),
+            )
+        ]
+        if note_ids:
+            placeholders = ",".join("?" for _ in note_ids)
+            if db.execute(
+                f"SELECT 1 FROM feed_queue WHERE note_id IN ({placeholders}) "
+                "AND claim_token IS NOT NULL LIMIT 1",
+                tuple(note_ids),
+            ).fetchone():
+                raise ValueError("wait for active delivery to finish before clearing this section")
+            attachment_count = db.execute(
+                f"SELECT COUNT(*) FROM attachments WHERE note_id IN ({placeholders})",
+                tuple(note_ids),
+            ).fetchone()[0]
+            attachment_paths = remove_note_attachments(db, note_ids)
+            db.execute(
+                f"DELETE FROM feed_queue WHERE note_id IN ({placeholders})", tuple(note_ids)
+            )
+            db.execute(f"DELETE FROM notes WHERE id IN ({placeholders})", tuple(note_ids))
+        else:
+            attachment_count = 0
+            attachment_paths = []
+        db.commit()
+    unlink_attachment_files(attachment_paths)
+    return {
+        "ok": True,
+        "sectionId": section_id,
+        "sectionName": str(section["name"]),
+        "deletedNotes": len(note_ids),
+        "deletedAttachments": int(attachment_count),
+    }
+
+
+def clear_section(args: argparse.Namespace) -> None:
+    print(json.dumps(clear_section_notes(args.section_id, args.confirm), ensure_ascii=False))
 
 
 def delete_section(args: argparse.Namespace) -> None:

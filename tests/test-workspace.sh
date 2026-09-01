@@ -171,6 +171,28 @@ import_payload=$(jq -n --arg markdown $'# Imported Viewer\n\n## Queue\n\n- [ ] P
 imported=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data "$import_payload" http://127.0.0.1:47832/api/bucket/import)
 jq -e '.id == "imported-viewer" and .noteCount == 2' <<<"$imported" >/dev/null
+imported_document=$(curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer')
+jq -e '.name == "Imported Viewer" and .noteCount == 2 and .submittedCount == 1
+  and .sections[0].name == "Queue"' <<<"$imported_document" >/dev/null
+clear_section_id=$(jq -r '.sections[0].id' <<<"$imported_document")
+[[ $(curl -sS -o "$tmp/clear-unconfirmed.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$clear_section_id" '{id: $id}')" \
+  http://127.0.0.1:47832/api/section/clear) == 400 ]]
+grep -Fq 'explicit section-clear confirmation does not match' "$tmp/clear-unconfirmed.json"
+[[ $(curl -sS -o "$tmp/clear-mismatch.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$clear_section_id" '{id: $id, confirmation: "wrong"}')" \
+  http://127.0.0.1:47832/api/section/clear) == 400 ]]
+jq -e '.noteCount == 2' \
+  <<<"$(curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer')" >/dev/null
+cleared=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$clear_section_id" '{id: $id, confirmation: $id}')" \
+  http://127.0.0.1:47832/api/section/clear)
+jq -e --arg id "$clear_section_id" \
+  '.ok == true and .sectionId == $id and .deletedNotes == 2' <<<"$cleared" >/dev/null
 curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer' \
-  | jq -e '.name == "Imported Viewer" and .noteCount == 2 and .submittedCount == 1
-    and .sections[0].name == "Queue"' >/dev/null
+  | jq -e --arg id "$clear_section_id" \
+    '.noteCount == 0 and .sections[0].id == $id and .sections[0].notes == []' >/dev/null
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'Type “${section.name}” to confirm'
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "request('/api/section/clear'"

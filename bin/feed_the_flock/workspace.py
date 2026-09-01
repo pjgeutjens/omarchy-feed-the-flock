@@ -46,6 +46,7 @@ from .store import (
     add_note_to_db,
     add_section,
     checked_note_text,
+    clear_section_notes,
     connect,
     delete_bucket,
     delete_section,
@@ -931,6 +932,12 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     section_id=str(value.get("id", "")), name=str(value.get("name", "")),
                 ))
                 self.json_response(200, {"ok": True})
+                return
+            if parsed.path == "/api/section/clear":
+                section_id = str(value.get("id", ""))
+                self.json_response(200, clear_section_notes(
+                    section_id, str(value.get("confirmation", "")),
+                ))
                 return
             if parsed.path == "/api/section/delete":
                 notes_mode = str(value.get("notes", "move"))

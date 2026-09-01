@@ -1,5 +1,5 @@
 import { request } from './api.js';
-import { isModalOpen, requestConfirmation, requestText } from './modal.js';
+import { isModalOpen, requestConfirmation, requestText, showModal } from './modal.js';
 import { isRoutingOpen, openRouting } from './routing.js';
 import { loadTheme } from './theme.js';
 
@@ -749,6 +749,34 @@ function sectionElement(section) {
       await load();
     } catch (error) { setStatus(error.message, true); }
   };
+  const clearSection = document.createElement('button');
+  clearSection.className = 'section-action clear';
+  clearSection.type = 'button';
+  clearSection.title = section.notes.length
+    ? 'Clear section; permanently delete all notes and managed attachments'
+    : 'Section is already empty';
+  clearSection.textContent = '⌫';
+  clearSection.disabled = section.notes.length === 0;
+  clearSection.setAttribute('aria-label', clearSection.title);
+  clearSection.onclick = async () => {
+    const confirmation = await requestText({
+      title: `Clear ${section.name}?`,
+      message: `This permanently deletes ${section.notes.length} notes and their managed image attachments, while keeping the section. Type “${section.name}” to confirm. This cannot be undone.`,
+      confirmLabel: 'Clear section', danger: true, maxLength: 50
+    });
+    if (confirmation === null) return;
+    if (confirmation !== section.name) {
+      setStatus('Section name did not match. Nothing was deleted.', true);
+      return;
+    }
+    try {
+      const result = await request('/api/section/clear', {
+        method: 'POST', body: JSON.stringify({ id: section.id, confirmation: section.id })
+      });
+      await load();
+      showToast(`Cleared ${result.deletedNotes} notes from ${section.name}`);
+    } catch (error) { setStatus(error.message, true); }
+  };
   const deleteSection = document.createElement('button');
   deleteSection.className = 'section-action delete';
   deleteSection.type = 'button';
@@ -773,7 +801,7 @@ function sectionElement(section) {
       await load();
     } catch (error) { setStatus(error.message, true); }
   };
-  sectionActions.append(queueSection, feedSectionNow, renameSection, deleteSection);
+  sectionActions.append(queueSection, feedSectionNow, renameSection, clearSection, deleteSection);
   headingRow.append(sectionHandle, heading, feedLabel, sectionActions);
   const notes = document.createElement('div');
   notes.className = 'notes';

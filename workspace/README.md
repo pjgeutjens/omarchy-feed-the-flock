@@ -51,6 +51,7 @@ The important section fields are `feedCurrent` (persisted selection), `feedActiv
 - Live SSE refreshes must preserve the active editor’s draft, selection, and focus while showing externally captured notes.
 - A bucket always retains its undeletable fallback section.
 - Deleting another section must explicitly choose moving notes to the fallback or discarding them.
+- Clearing retains the section but requires its exact name, removes all pending and submitted notes, and unlinks only attachment files managed inside the attachment directory.
 - A section is promoted visually only while its feed is active; after draining it returns to document order.
 - Starting from the viewer targets the visible bucket without changing the compact panel's browsing selection.
 - Workspace routing changes require an explicit Apply, update target/mode/order atomically, and are rejected while feeding is active.
