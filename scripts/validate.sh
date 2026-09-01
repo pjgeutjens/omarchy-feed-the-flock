@@ -20,6 +20,16 @@ python3 -m py_compile \
 for module in "$plugin_dir/workspace/js/"*.js; do
   node --check "$module"
 done
+for branded_file in AgentFeedPresentation.js Panel.qml workspace/index.html; do
+  grep -Fq '󰆚' "$plugin_dir/$branded_file" || {
+    echo "$branded_file does not use the md-cow product icon" >&2
+    exit 1
+  }
+  if grep -Fq "$(printf '\363\260\263\206')" "$plugin_dir/$branded_file"; then
+    echo "$branded_file still contains the legacy product icon" >&2
+    exit 1
+  fi
+done
 for asset in styles/theme.css styles/controls.css styles/overlays.css styles/document.css \
              styles/notes.css styles/responsive.css js/app.js; do
   grep -Fq "\"/$asset\"" "$plugin_dir/workspace/index.html" || {

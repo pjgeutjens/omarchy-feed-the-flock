@@ -6,10 +6,10 @@ TestCase {
   name: "AgentFeedPresentation"
 
   function test_icons() {
-    compare(Presentation.icon("idle"), "󰳆")
+    compare(Presentation.icon("idle"), "󰆚")
     compare(Presentation.icon("recording"), "󰕽")
     compare(Presentation.icon("success"), "󰄬")
-    compare(Presentation.icon("unknown"), "󰳆")
+    compare(Presentation.icon("unknown"), "󰆚")
   }
 
   function test_idleTooltip() {

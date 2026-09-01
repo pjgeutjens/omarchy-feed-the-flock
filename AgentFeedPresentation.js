@@ -14,7 +14,7 @@ function icon(value) {
   case "success": return "󰄬"
   case "cancelled": return "󰜺"
   case "error": return "󰅖"
-  default: return "󰳆"
+  default: return "󰆚"
   }
 }
 

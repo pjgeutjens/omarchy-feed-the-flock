@@ -234,7 +234,7 @@ Panel {
   Component {
     id: feedIcon
     Text {
-      text: AgentFeedCore.AgentFeedState.recording ? "󰕽" : "󰳆"
+      text: AgentFeedCore.AgentFeedState.recording ? "󰕽" : "󰆚"
       textFormat: Text.PlainText
       color: AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : root.contentForeground
       font.family: root.contentFontFamily
