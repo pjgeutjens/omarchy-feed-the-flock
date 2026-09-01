@@ -117,3 +117,16 @@ section.feed-current h2, section.feed-queued h2 { color: var(--accent); }
 .bucket-stats {
   color: var(--muted); font-size: 11px; line-height: 1.2; white-space: nowrap;
 }
+
+body.remote-read-only .bucket-action,
+body.remote-read-only .feed-toggle,
+body.remote-read-only .feed-queue-remove,
+body.remote-read-only .handle,
+body.remote-read-only .section-handle,
+body.remote-read-only .section-actions,
+body.remote-read-only .note-actions,
+body.remote-read-only .attachment-add-inline,
+body.remote-read-only .add {
+  display: none !important;
+}
+body.remote-read-only .target-value { color: var(--accent); }

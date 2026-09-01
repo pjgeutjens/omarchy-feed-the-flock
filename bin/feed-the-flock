@@ -6,6 +6,10 @@ import sqlite3
 import sys
 import time
 
+from feed_the_flock.bindings import (
+    BindingConflict,
+    register_binding_parser,
+)
 from feed_the_flock.capture import finalize, record_cancel, record_start, record_stop
 from feed_the_flock.feed import (
     deliver_command,
@@ -16,6 +20,9 @@ from feed_the_flock.feed import (
     select_queue_order,
     select_target,
     targets_command,
+)
+from feed_the_flock.remote import (
+    register_remote_parser,
 )
 from feed_the_flock.store import (
     add_bucket,
@@ -54,6 +61,7 @@ from feed_the_flock.workspace import (
     workspace_serve,
     workspace_stop,
 )
+
 
 def seed_demo(_: argparse.Namespace) -> None:
     sample_sections = [
@@ -114,6 +122,10 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("init").set_defaults(func=init_command)
     commands.add_parser("state").set_defaults(func=state_command)
     commands.add_parser("targets").set_defaults(func=targets_command)
+
+    register_binding_parser(commands)
+    register_remote_parser(commands)
+
     deliver = commands.add_parser("deliver")
     deliver.add_argument("note_id")
     deliver.add_argument("target_id", nargs="?")
@@ -274,6 +286,9 @@ def main() -> int:
     try:
         args.func(args)
         return 0
+    except BindingConflict as error:
+        print(f"feed-the-flock: {error}", file=sys.stderr)
+        return 3
     except (OSError, sqlite3.Error, ValueError) as error:
         print(f"feed-the-flock: {error}", file=sys.stderr)
         return 1

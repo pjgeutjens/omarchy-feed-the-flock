@@ -12,6 +12,14 @@ Item {
   property bool initialized: false
   property bool refreshing: stateProcess.running
   property bool busy: actionProcess.running
+  property bool remoteMode: false
+  property string remoteEndpoint: ""
+  property string suggestedRemoteEndpoint: ""
+  property string recordBinding: ""
+  property string feedBinding: ""
+  property bool recordBindingOverride: false
+  property bool feedBindingOverride: false
+  property bool bindingsInstalled: false
   property string phase: "idle"
   property string error: ""
   property string captureBucketName: ""
@@ -55,6 +63,11 @@ Item {
   property string _actionError: ""
   property string _targetsOutput: ""
   property string _targetsError: ""
+  property string _actionKind: ""
+  property string _actionValue: ""
+  property string _actionMode: ""
+  signal bindingApplied(string mode, bool success)
+  signal bindingConflict(string mode, string shortcut, string detail)
 
   readonly property string pluginRoot: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/io.github.pjgeutjens.agentfeed"
@@ -84,6 +97,13 @@ Item {
           || typeof value.activeSectionId !== "string" || typeof value.phase !== "string")
         throw new Error("unexpected state shape")
       root.phase = value.phase
+      root.remoteMode = Boolean(value.remoteMode)
+      root.remoteEndpoint = String(value.remoteEndpoint || "")
+      root.recordBinding = String(value.recordBinding || "")
+      root.feedBinding = String(value.feedBinding || "")
+      root.recordBindingOverride = Boolean(value.recordBindingOverride)
+      root.feedBindingOverride = Boolean(value.feedBindingOverride)
+      root.bindingsInstalled = Boolean(value.bindingsInstalled)
       root.error = String(value.error || "")
       root.captureBucketName = String(value.captureBucketName || "")
       root.captureSectionName = String(value.captureSectionName || "")
@@ -127,6 +147,7 @@ Item {
       if (!value || !(value.targets instanceof Array) || typeof value.selectedTargetId !== "string")
         throw new Error("unexpected target shape")
       root.deliveryTargets = value.targets
+      root.suggestedRemoteEndpoint = String(value.suggestedRemoteEndpoint || "")
       root.selectedDeliveryTargetId = value.selectedTargetId
       root.selectedDeliveryTargetLabel = String(value.selectedTargetLabel || "Clipboard")
     } catch (failure) {
@@ -134,17 +155,24 @@ Item {
     }
   }
 
-  function runAction(arguments) {
+  function runAction(arguments, kind, value, mode) {
     if (!root.installed || actionProcess.running) return false
     root._actionOutput = ""
     root._actionError = ""
+    root._actionKind = String(kind || "")
+    root._actionValue = String(value || "")
+    root._actionMode = String(mode || "")
     root.lastError = ""
     actionProcess.command = [root.commandPath].concat(arguments)
     actionProcess.running = true
     return true
   }
 
-  function selectBucket(bucketId) { return root.runAction(["bucket", "select", String(bucketId)]) }
+  function selectBucket(bucketId) {
+    return root.remoteMode
+      ? root.runAction(["remote", "bucket", String(bucketId)])
+      : root.runAction(["bucket", "select", String(bucketId)])
+  }
   function createBucket(name) { return root.runAction(["bucket", "add", String(name)]) }
   function renameBucket(bucketId, name) {
     return root.runAction(["bucket", "rename", String(bucketId), String(name)])
@@ -157,7 +185,11 @@ Item {
   function exportBucket(bucketId) {
     return root.runAction(["bucket", "export", String(bucketId), "--notify"])
   }
-  function selectSection(sectionId) { return root.runAction(["section", "select", String(sectionId)]) }
+  function selectSection(sectionId) {
+    return root.remoteMode
+      ? root.runAction(["remote", "section", String(sectionId)])
+      : root.runAction(["section", "select", String(sectionId)])
+  }
   function selectFeedSection(sectionId) { return root.runAction(["section", "feed", String(sectionId)]) }
   function selectFeedSectionNow(sectionId) {
     return root.runAction(["section", "feed-now", String(sectionId)])
@@ -207,9 +239,24 @@ Item {
   function startRecording() { return root.runAction(["record", "start"]) }
   function stopRecording() { return root.runAction(["record", "stop"]) }
   function cancelRecording() { return root.runAction(["record", "cancel"]) }
+  function connectRemote(endpoint) {
+    return root.runAction(["remote", "connect", String(endpoint)])
+  }
+  function disconnectRemote() { return root.runAction(["remote", "disconnect"]) }
+  function prepareBindings() { return root.runAction(["binding", "prepare"]) }
+  function setBinding(mode, shortcut, overrideExisting) {
+    var kind = mode === "feed" ? "feed" : "record"
+    var arguments = ["binding", kind, "set", String(shortcut)]
+    if (overrideExisting) arguments.push("--override")
+    return root.runAction(arguments, "binding", String(shortcut), kind)
+  }
+  function clearBinding(mode) {
+    var kind = mode === "feed" ? "feed" : "record"
+    return root.runAction(["binding", kind, "clear"], "binding", "", kind)
+  }
 
   Timer {
-    interval: root.panelOpen || root.phase !== "idle" ? 500 : 2000
+    interval: root.remoteMode ? 5000 : (root.panelOpen || root.phase !== "idle" ? 500 : 2000)
     repeat: true
     running: root.installed
     triggeredOnStart: true
@@ -311,7 +358,21 @@ Item {
     onExited: function(exitCode) {
       var stdout = String(root._actionOutput || actionStdout.text || "")
       var stderr = String(root._actionError || actionStderr.text || "")
-      if (exitCode !== 0) root.lastError = root.cleanError(stderr || stdout || "Feed the Flock action failed")
+      var kind = root._actionKind
+      var value = root._actionValue
+      var mode = root._actionMode
+      root._actionKind = ""
+      root._actionValue = ""
+      root._actionMode = ""
+      if (exitCode === 3 && kind === "binding") {
+        root.lastError = ""
+        root.bindingConflict(mode, value, root.cleanError(stderr || stdout))
+        return
+      }
+      if (exitCode !== 0) {
+        root.lastError = root.cleanError(stderr || stdout || "Feed the Flock action failed")
+        if (kind === "binding") root.bindingApplied(mode, false)
+      } else if (kind === "binding") root.bindingApplied(mode, true)
       Qt.callLater(root.refresh)
       Qt.callLater(root.refreshTargets)
     }

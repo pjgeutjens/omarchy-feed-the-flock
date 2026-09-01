@@ -40,7 +40,7 @@ def safe_label(value: object, maximum: int) -> str:
     return " ".join(text.split())[:maximum]
 
 
-def parse_herdr_targets(output: bytes, *, remote_host: str = "") -> list[dict[str, object]]:
+def parse_herdr_targets(output: bytes) -> list[dict[str, object]]:
     response = json.loads(output.decode(errors="replace")).get("result", {})
     snapshot = response.get("snapshot", response)
     agents = snapshot.get("agents", [])
@@ -67,26 +67,14 @@ def parse_herdr_targets(output: bytes, *, remote_host: str = "") -> list[dict[st
             or pane_id,
             120,
         )
-        if remote_host:
-            targets.append({
-                "id": f"remote:{remote_host}:{pane_id}",
-                "kind": "remote-herdr",
-                "label": f"REMOTE {remote_host} · {name} · {context}",
-                "status": status,
-                "available": False,
-                "readOnly": True,
-                "paneId": pane_id,
-                "remoteHost": remote_host,
-            })
-        else:
-            targets.append({
-                "id": f"herdr:{pane_id}",
-                "kind": "herdr",
-                "label": f"{name} · {context}",
-                "status": status,
-                "available": status in {"idle", "done"},
-                "paneId": pane_id,
-            })
+        targets.append({
+            "id": f"herdr:{pane_id}",
+            "kind": "herdr",
+            "label": f"{name} · {context}",
+            "status": status,
+            "available": status in {"idle", "done"},
+            "paneId": pane_id,
+        })
     return targets
 
 
@@ -124,81 +112,6 @@ def running_remote_hosts() -> list[str]:
     return hosts
 
 
-def validated_cached_remote_targets(value: object, hosts: list[str]) -> list[dict[str, object]]:
-    if not isinstance(value, list) or len(value) > 256:
-        return []
-    targets: list[dict[str, object]] = []
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        host = str(item.get("remoteHost", ""))
-        pane_id = str(item.get("paneId", ""))
-        if host not in hosts or (pane_id and not re.fullmatch(r"[A-Za-z0-9]+:p[A-Za-z0-9]+", pane_id)):
-            continue
-        targets.append({
-            "id": f"remote:{host}:{pane_id}" if pane_id else f"remote:{host}",
-            "kind": "remote-herdr",
-            "label": safe_label(item.get("label", f"REMOTE {host}"), 360),
-            "status": safe_label(item.get("status", "unknown"), 40),
-            "available": False,
-            "readOnly": True,
-            "remoteHost": host,
-            **({"paneId": pane_id} if pane_id else {}),
-        })
-    return targets
-
-
-def remote_herdr_targets() -> list[dict[str, object]]:
-    hosts = running_remote_hosts()
-    if not hosts:
-        return []
-    with connect() as db:
-        try:
-            cache = json.loads(setting(db, "remote_targets_cache", "{}"))
-            cached_at = float(cache.get("createdAt", 0))
-            cached_hosts = cache.get("hosts", [])
-            cached_targets = cache.get("targets", [])
-            if (
-                cached_hosts == hosts and 0 <= time.time() - cached_at < 10
-                and isinstance(cached_targets, list) and len(cached_targets) <= 256
-            ):
-                validated_targets = validated_cached_remote_targets(cached_targets, hosts)
-                if len(validated_targets) == len(cached_targets):
-                    return validated_targets
-        except (ValueError, TypeError, json.JSONDecodeError, AttributeError):
-            pass
-
-    targets: list[dict[str, object]] = []
-    for host in hosts:
-        try:
-            remote_result = run_bounded(
-                [
-                    "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=2",
-                    "-o", "ConnectionAttempts=1", "--", host, "herdr", "api", "snapshot",
-                ],
-                timeout=4, stdout_limit=512 * 1024, stderr_limit=64 * 1024,
-            )
-            if remote_result.returncode != 0:
-                raise ValueError("remote Herdr unavailable")
-            targets.extend(parse_herdr_targets(remote_result.stdout, remote_host=host))
-        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError, json.JSONDecodeError, AttributeError, TypeError):
-            targets.append({
-                "id": f"remote:{host}",
-                "kind": "remote-herdr",
-                "label": f"REMOTE {host} · unavailable",
-                "status": "unavailable",
-                "available": False,
-                "readOnly": True,
-                "remoteHost": host,
-            })
-    targets = targets[:256]
-    with connect() as db:
-        set_setting(db, "remote_targets_cache", json.dumps({
-            "createdAt": time.time(), "hosts": hosts, "targets": targets,
-        }, separators=(",", ":")))
-        db.commit()
-    return targets
-
 
 def herdr_targets() -> tuple[list[dict[str, object]], str]:
     try:
@@ -228,7 +141,7 @@ def herdr_targets() -> tuple[list[dict[str, object]], str]:
             local_targets = []
             error = "Herdr returned invalid session data"
 
-    return [*local_targets, *remote_herdr_targets()], error
+    return local_targets, error
 
 
 def targets_payload() -> dict[str, object]:
@@ -294,6 +207,7 @@ def targets_payload() -> dict[str, object]:
         queue_order = setting(db, "queue_order", "fifo")
     return {
         "targets": all_targets,
+        "suggestedRemoteEndpoint": (running_remote_hosts() or [""])[0],
         "selectedTargetId": selected_id,
         "selectedTargetLabel": selected_label,
         "activeNoteIds": active_note_ids,
@@ -478,6 +392,8 @@ def select_queue_order(args: argparse.Namespace) -> None:
 def feed_control(args: argparse.Namespace) -> None:
     with connect() as db:
         enabled = setting(db, "feed_enabled", "0") == "1"
+        if setting(db, "remote_mode", "0") == "1" and args.action != "stop":
+            raise ValueError("feeding is unavailable while browsing a remote feeder")
         if args.action == "toggle":
             requested = not enabled
         elif args.action == "resume":

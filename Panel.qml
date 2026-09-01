@@ -15,6 +15,8 @@ Panel {
   property var hostWidget: null
   property bool helpOpen: false
   property bool notesOpen: false
+  property bool remoteOpen: false
+  property bool bindingsOpen: false
   property bool creatingBucket: false
   property bool creatingSection: false
   property string editingBucketId: ""
@@ -181,8 +183,39 @@ Panel {
   }
 
   function toggleRecording() {
+    if (AgentFeedCore.AgentFeedState.remoteMode) return
     if (AgentFeedCore.AgentFeedState.recording) AgentFeedCore.AgentFeedState.stopRecording()
     else if (!AgentFeedCore.AgentFeedState.processing) AgentFeedCore.AgentFeedState.startRecording()
+  }
+
+  function suggestedRemoteEndpoint() {
+    return AgentFeedCore.AgentFeedState.suggestedRemoteEndpoint
+  }
+
+  function openRemote() {
+    root.helpOpen = false
+    root.notesOpen = false
+    root.bindingsOpen = false
+    root.remoteOpen = true
+    remoteOverlay.open(root.suggestedRemoteEndpoint())
+  }
+  function closeRemote() {
+    root.remoteOpen = false
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+  function openBindings() {
+    root.helpOpen = false
+    root.notesOpen = false
+    root.remoteOpen = false
+    root.bindingsOpen = true
+    if (!AgentFeedCore.AgentFeedState.bindingsInstalled)
+      AgentFeedCore.AgentFeedState.prepareBindings()
+    bindingsOverlay.open()
+  }
+  function closeBindings() {
+    bindingsOverlay.stopCapture()
+    root.bindingsOpen = false
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   function openHelp() {
@@ -227,6 +260,8 @@ Panel {
     } else {
       root.helpOpen = false
       root.notesOpen = false
+      root.remoteOpen = false
+      root.bindingsOpen = false
       keybindingsOverlay.reset()
     }
   }
@@ -255,7 +290,7 @@ Panel {
     AgentFeedKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: root.notesOpen || keybindingsOverlay.inputFocused
+      blocked: root.notesOpen || root.remoteOpen || root.bindingsOpen || keybindingsOverlay.inputFocused
         || newBucketField.activeFocus || newSectionField.activeFocus
       onMoveRequested: function(dx, dy) {
         if (!root.helpOpen && dx !== 0) root.cycleBucket(dx)
@@ -265,10 +300,10 @@ Panel {
         else root.close()
       }
       onDeleteSectionRequested: {
-        if (!root.helpOpen) root.beginDeleteSection()
+        if (!root.helpOpen && !AgentFeedCore.AgentFeedState.remoteMode) root.beginDeleteSection()
       }
       onDeleteBucketRequested: {
-        if (!root.helpOpen)
+        if (!root.helpOpen && !AgentFeedCore.AgentFeedState.remoteMode)
           AgentFeedCore.AgentFeedState.deleteBucket(AgentFeedCore.AgentFeedState.activeBucketId)
       }
       onTabRequested: function(direction) { if (!root.helpOpen) root.cycleSection(direction) }
@@ -280,8 +315,13 @@ Panel {
         }
         if (text === "h" || text === "H") root.cycleBucket(-1)
         else if (text === "l" || text === "L") root.cycleBucket(1)
-        else if (text === "r" || text === "R") root.toggleRecording()
+        else if (text === "r" || text === "R") root.openRemote()
         else if (text === "n" || text === "N") root.toggleNotes()
+        else if (AgentFeedCore.AgentFeedState.remoteMode) {
+          if (text === "o" || text === "O") AgentFeedCore.AgentFeedState.openBucket()
+          else if (text === "?") root.toggleHelp()
+          return
+        }
         else if (text === "i" || text === "I") AgentFeedCore.AgentFeedState.importBucket()
         else if (text === "x") AgentFeedCore.AgentFeedState.exportBucket(
           AgentFeedCore.AgentFeedState.activeBucketId)
@@ -317,7 +357,7 @@ Panel {
 
       ScrollView {
         id: scrollArea
-        visible: !root.helpOpen && !root.notesOpen
+        visible: !root.helpOpen && !root.notesOpen && !root.remoteOpen && !root.bindingsOpen
         anchors.fill: parent
         anchors.bottomMargin: fixedFooter.implicitHeight + Style.space(7)
         clip: true
@@ -333,7 +373,9 @@ Panel {
             width: parent.width
             iconComponent: feedIcon
             title: "Feed the Flock"
-            meta: AgentFeedCore.AgentFeedState.totalCount + " NOTES · CAPTURE AND DELIVERY"
+            meta: AgentFeedCore.AgentFeedState.remoteMode
+              ? AgentFeedCore.AgentFeedState.totalCount + " NOTES · REMOTE READ ONLY"
+              : AgentFeedCore.AgentFeedState.totalCount + " NOTES · CAPTURE AND DELIVERY"
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
           }
@@ -350,16 +392,37 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
+          BorderSurface {
+            visible: AgentFeedCore.AgentFeedState.remoteMode
+            width: parent.width
+            implicitHeight: remoteStatus.implicitHeight + Style.space(16)
+            color: Util.alpha(Color.accent, 0.06)
+            borderSpec: Border.flat(Color.accent, Style.normalBorderWidth)
+            radius: Style.cornerRadius
+            Text {
+              id: remoteStatus
+              anchors.centerIn: parent
+              text: "REMOTE · " + AgentFeedCore.AgentFeedState.remoteEndpoint + " · READ ONLY"
+              textFormat: Text.PlainText
+              color: Color.accent
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+            }
+          }
+
           Row {
             width: parent.width
             PanelSectionHeader {
-              width: parent.width - bucketOrderActions.width
+              width: AgentFeedCore.AgentFeedState.remoteMode
+                ? parent.width : parent.width - bucketOrderActions.width
               text: "BUCKET"
               foreground: root.contentForeground
               fontFamily: root.contentFontFamily
             }
             Row {
               id: bucketOrderActions
+              visible: !AgentFeedCore.AgentFeedState.remoteMode
               spacing: Style.space(2)
               PanelActionButton {
                 iconText: "‹"
@@ -447,7 +510,7 @@ Panel {
           }
 
           Row {
-            visible: root.creatingBucket
+            visible: root.creatingBucket && !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             spacing: Style.space(6)
             TextField {
@@ -477,13 +540,15 @@ Panel {
           Row {
             width: parent.width
             PanelSectionHeader {
-              width: parent.width - sectionOrderActions.width
+              width: AgentFeedCore.AgentFeedState.remoteMode
+                ? parent.width : parent.width - sectionOrderActions.width
               text: "SECTION"
               foreground: root.contentForeground
               fontFamily: root.contentFontFamily
             }
             Row {
               id: sectionOrderActions
+              visible: !AgentFeedCore.AgentFeedState.remoteMode
               spacing: Style.space(2)
               PanelActionButton {
                 iconText: "+"
@@ -561,6 +626,7 @@ Panel {
               }
             }
             Button {
+              visible: !AgentFeedCore.AgentFeedState.remoteMode
               text: "+"
               tooltipText: "Create section"
               bordered: true
@@ -579,6 +645,7 @@ Panel {
           }
 
           Column {
+            visible: !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             spacing: Style.space(5)
             Text {
@@ -628,7 +695,7 @@ Panel {
           }
 
           BorderSurface {
-            visible: root.deletingSectionId !== ""
+            visible: root.deletingSectionId !== "" && !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             implicitHeight: deleteSectionFlow.implicitHeight + Style.space(16)
             color: Util.alpha(root.urgentForeground, 0.05)
@@ -677,7 +744,7 @@ Panel {
           }
 
           Row {
-            visible: root.creatingSection
+            visible: root.creatingSection && !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             spacing: Style.space(6)
             TextField {
@@ -705,6 +772,7 @@ Panel {
           }
 
           Row {
+            visible: !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             spacing: Style.space(8)
             Button {
@@ -768,7 +836,9 @@ Panel {
           Button {
             width: parent.width
             height: Style.space(38)
-            text: "↗  OPEN WORKSPACE  ·  ADD, EDIT & ORGANIZE NOTES"
+            text: AgentFeedCore.AgentFeedState.remoteMode
+              ? "↗  OPEN REMOTE WORKSPACE  ·  READ ONLY"
+              : "↗  OPEN WORKSPACE  ·  ADD, EDIT & ORGANIZE NOTES"
             tooltipText: "Open the full HTML workspace (O)"
             bordered: true
             foreground: Color.accent
@@ -778,6 +848,7 @@ Panel {
           }
 
           Row {
+            visible: !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             spacing: Style.space(7)
             Text {
@@ -813,10 +884,7 @@ Panel {
                 width: targetPicker.width
                 enabled: !modelData.readOnly
                 text: modelData.kind === "herdr"
-                  ? modelData.label + "  ·  " + modelData.status
-                  : modelData.kind === "remote-herdr"
-                    ? modelData.label + "  ·  " + modelData.status + "  ·  READ ONLY"
-                    : modelData.label
+                  ? modelData.label + "  ·  " + modelData.status : modelData.label
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
                 highlighted: targetPicker.highlightedIndex === index
@@ -825,6 +893,7 @@ Panel {
           }
 
           Row {
+            visible: !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             spacing: Style.space(7)
             Text {
@@ -878,6 +947,7 @@ Panel {
           }
 
           Row {
+            visible: !AgentFeedCore.AgentFeedState.remoteMode
             width: parent.width
             spacing: Style.space(7)
             Text {
@@ -922,7 +992,7 @@ Panel {
 
       Rectangle {
         id: fixedFooter
-        visible: !root.helpOpen && !root.notesOpen
+        visible: !root.helpOpen && !root.notesOpen && !root.remoteOpen && !root.bindingsOpen
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -931,16 +1001,40 @@ Panel {
         Text {
           id: footerText
           anchors.left: parent.left
-          anchors.right: helpButton.left
+          anchors.right: bindingsButton.left
           anchors.rightMargin: Style.space(5)
           anchors.verticalCenter: parent.verticalCenter
-          text: "N notes · O workspace · I/X transfer · T target · M mode · Q order · F feed"
+          text: AgentFeedCore.AgentFeedState.remoteMode
+            ? "H/L buckets · Tab sections · N notes · O workspace · R connection"
+            : "N notes · O workspace · R remote · T target · F feed"
           textFormat: Text.PlainText
           color: root.dimForeground
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
           horizontalAlignment: Text.AlignHCenter
           elide: Text.ElideRight
+        }
+        PanelActionButton {
+          id: bindingsButton
+          anchors.right: remoteButton.left
+          anchors.rightMargin: Style.space(3)
+          anchors.verticalCenter: parent.verticalCenter
+          iconText: "󰌌"
+          tooltipText: "Configure global shortcuts"
+          foreground: root.contentForeground
+          fontFamily: "JetBrainsMono Nerd Font"
+          onClicked: root.openBindings()
+        }
+        PanelActionButton {
+          id: remoteButton
+          anchors.right: helpButton.left
+          anchors.rightMargin: Style.space(3)
+          anchors.verticalCenter: parent.verticalCenter
+          iconText: "R"
+          tooltipText: "Connect or disconnect remote feeder (R)"
+          foreground: AgentFeedCore.AgentFeedState.remoteMode ? Color.accent : root.contentForeground
+          fontFamily: root.contentFontFamily
+          onClicked: root.openRemote()
         }
         PanelActionButton {
           id: helpButton
@@ -964,7 +1058,7 @@ Panel {
         fontFamily: root.contentFontFamily
         sectionName: root.selectedSectionName()
         notes: AgentFeedCore.AgentFeedState.notes
-        busy: AgentFeedCore.AgentFeedState.busy
+        busy: AgentFeedCore.AgentFeedState.busy || AgentFeedCore.AgentFeedState.remoteMode
         onCloseRequested: root.closeNotes()
         onMoveRequested: function(noteId, direction) {
           AgentFeedCore.AgentFeedState.moveNote(noteId, direction)
@@ -983,7 +1077,57 @@ Panel {
         foreground: root.contentForeground
         dimForeground: root.dimForeground
         fontFamily: root.contentFontFamily
+        recordBinding: AgentFeedCore.AgentFeedState.recordBinding
+        feedBinding: AgentFeedCore.AgentFeedState.feedBinding
         onCloseRequested: root.closeHelp()
+      }
+
+      RemoteConnectOverlay {
+        id: remoteOverlay
+        visible: root.remoteOpen
+        anchors.fill: parent
+        z: 31
+        foreground: root.contentForeground
+        dimForeground: root.dimForeground
+        fontFamily: root.contentFontFamily
+        endpoint: AgentFeedCore.AgentFeedState.remoteEndpoint
+        connected: AgentFeedCore.AgentFeedState.remoteMode
+        busy: AgentFeedCore.AgentFeedState.busy
+        onConnectRequested: function(endpoint) {
+          if (AgentFeedCore.AgentFeedState.connectRemote(endpoint)) root.closeRemote()
+        }
+        onDisconnectRequested: {
+          if (AgentFeedCore.AgentFeedState.disconnectRemote()) root.closeRemote()
+        }
+        onCloseRequested: root.closeRemote()
+      }
+
+      BindingsOverlay {
+        id: bindingsOverlay
+        visible: root.bindingsOpen
+        anchors.fill: parent
+        z: 31
+        foreground: root.contentForeground
+        dimForeground: root.dimForeground
+        fontFamily: root.contentFontFamily
+        recordBinding: AgentFeedCore.AgentFeedState.recordBinding
+        feedBinding: AgentFeedCore.AgentFeedState.feedBinding
+        recordOverride: AgentFeedCore.AgentFeedState.recordBindingOverride
+        feedOverride: AgentFeedCore.AgentFeedState.feedBindingOverride
+        busy: AgentFeedCore.AgentFeedState.busy
+        onSetRequested: function(mode, shortcut, overrideExisting) {
+          AgentFeedCore.AgentFeedState.setBinding(mode, shortcut, overrideExisting)
+        }
+        onClearRequested: function(mode) { AgentFeedCore.AgentFeedState.clearBinding(mode) }
+        onCloseRequested: root.closeBindings()
+      }
+
+      Connections {
+        target: AgentFeedCore.AgentFeedState
+        function onBindingApplied(mode, success) { bindingsOverlay.applied(success) }
+        function onBindingConflict(mode, shortcut, detail) {
+          bindingsOverlay.conflict(mode, shortcut, detail)
+        }
       }
     }
   }
