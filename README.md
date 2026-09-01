@@ -30,7 +30,7 @@ Requirements:
 Install and enable the git-managed plugin:
 
 ```sh
-omarchy plugin add https://github.com/pjgeutjens/feed-the-flock.git --enable
+omarchy plugin add https://github.com/pjgeutjens/omarchy-feed-the-flock.git --enable
 ```
 
 Optionally install the global capture and feed shortcuts:
