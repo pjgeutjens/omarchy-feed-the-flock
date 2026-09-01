@@ -30,6 +30,13 @@ TestCase {
     compare(modes[0].description, "oldest pending first")
   }
 
+  function test_keyColumnWidth() {
+    compare(Presentation.keyColumnWidth(600, 148, 80), 148)
+    compare(Presentation.keyColumnWidth(600, 500, 80), 252)
+    compare(Presentation.keyColumnWidth(600, 40, 80), 80)
+    compare(Presentation.keyColumnWidth(100, 500, 80), 80)
+  }
+
   function test_idleTooltip() {
     compare(Presentation.tooltip("idle", 4), "Feed the Flock · 4 queued notes")
   }

@@ -44,6 +44,14 @@ function hintedDropdownOptions(values) {
   return options
 }
 
+function keyColumnWidth(availableWidth, naturalWidth, minimumWidth) {
+  var available = Math.max(0, Number(availableWidth) || 0)
+  var natural = Math.max(0, Number(naturalWidth) || 0)
+  var minimum = Math.max(0, Number(minimumWidth) || 0)
+  var maximum = Math.max(minimum, available * 0.42)
+  return Math.min(Math.max(minimum, natural), maximum)
+}
+
 function tooltip(value, count) {
   switch (normalizePhase(value)) {
   case "recording": return "Feed the Flock · Recording…"

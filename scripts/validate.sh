@@ -65,6 +65,13 @@ grep -Fq 'text: "Configure keybindings"' "$plugin_dir/BindingsOverlay.qml"
 grep -Fq 'Original preserved:' "$plugin_dir/BindingsOverlay.qml"
 grep -Fq 'text: "Source: " + String(modelData.source || "Unknown")' "$plugin_dir/BindingsOverlay.qml"
 grep -Fq 'text === "k" || text === "K"' "$plugin_dir/Panel.qml"
+grep -Fq 'width: root.keyColumnWidth' "$plugin_dir/KeybindingsOverlay.qml"
+grep -Fq 'wrapMode: Text.WrapAnywhere' "$plugin_dir/KeybindingsOverlay.qml"
+grep -Fq 'wrapMode: Text.WordWrap' "$plugin_dir/KeybindingsOverlay.qml"
+if grep -Fq 'elide: Text.ElideRight' "$plugin_dir/KeybindingsOverlay.qml"; then
+  echo "keybinding-reference labels must wrap rather than truncate" >&2
+  exit 1
+fi
 bash -n "$plugin_dir/scripts/manage-binding.sh" "$plugin_dir/scripts/prepare-remove.sh"
 "$plugin_dir/tests/test-cli.sh"
 "$plugin_dir/tests/test-bindings.sh"

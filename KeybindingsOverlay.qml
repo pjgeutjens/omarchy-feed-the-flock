@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui
+import "AgentFeedPresentation.js" as Presentation
 
 Rectangle {
   id: root
@@ -49,8 +50,18 @@ Rectangle {
   ]
   readonly property var filteredBindings: filterBindings()
   readonly property var groupedBindings: groupBindings()
+  readonly property real naturalKeyColumnWidth: widestKeyLabelWidth() + Style.space(4)
+  readonly property real keyColumnWidth: Presentation.keyColumnWidth(
+    width - Style.space(30), naturalKeyColumnWidth, Style.space(80))
 
   color: Color.background
+
+  FontMetrics {
+    id: bindingKeyMetrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.bodySmall
+    font.bold: true
+  }
 
   function focusSearch() {
     Qt.callLater(function() { helpSearch.forceActiveFocus() })
@@ -65,6 +76,13 @@ Rectangle {
       return (binding.category + " " + binding.keys + " " + binding.action)
         .toLowerCase().indexOf(needle) !== -1
     })
+  }
+
+  function widestKeyLabelWidth() {
+    var widest = 0
+    for (var index = 0; index < bindings.length; index++)
+      widest = Math.max(widest, bindingKeyMetrics.advanceWidth(String(bindings[index].keys || "")))
+    return Math.ceil(widest)
   }
 
   function groupBindings() {
@@ -179,7 +197,7 @@ Rectangle {
           color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.05)
           Text {
             id: bindingKey
-            width: Style.space(110)
+            width: root.keyColumnWidth
             anchors.left: parent.left
             anchors.leftMargin: Style.space(10)
             anchors.verticalCenter: parent.verticalCenter
@@ -189,11 +207,12 @@ Rectangle {
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
             font.bold: true
-            elide: Text.ElideRight
+            wrapMode: Text.WrapAnywhere
           }
           Text {
             id: bindingAction
             anchors.left: bindingKey.right
+            anchors.leftMargin: Style.space(10)
             anchors.right: parent.right
             anchors.rightMargin: Style.space(10)
             anchors.verticalCenter: parent.verticalCenter
@@ -202,7 +221,7 @@ Rectangle {
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
-            elide: Text.ElideRight
+            wrapMode: Text.WordWrap
           }
         }
       }
