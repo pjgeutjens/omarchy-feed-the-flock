@@ -47,3 +47,23 @@
 .modal-button:hover, .modal-button:focus { background: color-mix(in srgb, var(--text) 8%, transparent); outline: none; }
 .modal-button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
 .modal-button.danger { border-color: var(--danger); background: var(--danger); color: var(--bg); }
+.routing-card { width: min(520px, 100%); }
+.routing-fields { display: grid; gap: 14px; margin-top: 18px; }
+.routing-field { display: grid; gap: 5px; }
+.routing-field > span {
+  color: var(--muted); font-size: 11px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.routing-field select {
+  width: 100%; padding: 9px 34px 9px 10px;
+  border: 1px solid var(--faint); border-radius: 7px;
+  outline: none; background: color-mix(in srgb, var(--bg) 86%, var(--text));
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.routing-field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.routing-field select:disabled { cursor: not-allowed; opacity: .55; }
+.routing-field small { min-height: 1.25em; color: var(--muted); font-size: 12px; }
+.routing-message { min-height: 1.4em; margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+.routing-message.error { color: var(--danger); }
+.routing-message.warning { color: var(--accent); }
+#routing-apply:disabled { cursor: not-allowed; opacity: .5; }

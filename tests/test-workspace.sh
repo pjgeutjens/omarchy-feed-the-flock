@@ -60,6 +60,38 @@ curl -fsS http://127.0.0.1:47832/api/targets \
   | jq -e '.selectedTargetId == "herdr:w1:p2"
     and ([.targets[].id] | index("clipboard")) == null
     and ([.targets[].kind] | all(. == "herdr"))' >/dev/null
+curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="routing-card"'
+curl -fsS http://127.0.0.1:47832/js/routing.js | grep -Fq "request('/api/routing'"
+
+routing=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data '{"targetId":"herdr:w1:p2","deliveryMode":"idle-all-batch","queueOrder":"lifo"}' \
+  http://127.0.0.1:47832/api/routing)
+jq -e '.targetId == "herdr:w1:p2" and .deliveryMode == "idle-all-batch"
+  and .queueOrder == "lifo"' <<<"$routing" >/dev/null
+jq -e '.deliveryMode == "idle-all-batch" and .queueOrder == "lifo"' \
+  <<<"$("$cli" state)" >/dev/null
+[[ $(curl -sS -o "$tmp/invalid-mode.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' \
+  --data '{"targetId":"herdr:w1:p2","deliveryMode":"invalid","queueOrder":"fifo"}' \
+  http://127.0.0.1:47832/api/routing) == 400 ]]
+grep -Fq 'unsupported delivery mode' "$tmp/invalid-mode.json"
+[[ $(curl -sS -o "$tmp/invalid-order.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' \
+  --data '{"targetId":"herdr:w1:p2","deliveryMode":"idle-active-next","queueOrder":"invalid"}' \
+  http://127.0.0.1:47832/api/routing) == 400 ]]
+grep -Fq 'unsupported queue order' "$tmp/invalid-order.json"
+[[ $(curl -sS -o "$tmp/invalid-target.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' \
+  --data '{"targetId":"herdr:missing","deliveryMode":"idle-active-next","queueOrder":"fifo"}' \
+  http://127.0.0.1:47832/api/routing) == 400 ]]
+grep -Fq 'no longer available' "$tmp/invalid-target.json"
+jq -e '.deliveryMode == "idle-all-batch" and .queueOrder == "lifo"' \
+  <<<"$("$cli" state)" >/dev/null
+
+[[ $(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+  -H 'Origin: https://evil.example' -H 'Content-Type: application/json' \
+  --data '{"targetId":"herdr:w1:p2","deliveryMode":"idle-active-next","queueOrder":"fifo"}' \
+  http://127.0.0.1:47832/api/routing) == 400 ]]
 [[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' \
   http://127.0.0.1:47832/api/buckets) == 400 ]]
 [[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' \
@@ -69,6 +101,13 @@ curl -fsS -X POST -H 'Content-Type: application/json' \
   http://127.0.0.1:47832/api/feed | jq -e '.feedEnabled == true' >/dev/null
 jq -e '.activeBucketId == "ideas" and .feedBucketId == "inbox"
   and .feedSectionId == "inbox:unsorted" and .feedEnabled == true' \
+  <<<"$("$cli" state)" >/dev/null
+[[ $(curl -sS -o "$tmp/active-routing.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' \
+  --data '{"targetId":"herdr:w1:p2","deliveryMode":"idle-active-next","queueOrder":"fifo"}' \
+  http://127.0.0.1:47832/api/routing) == 400 ]]
+grep -Fq 'stop the feed' "$tmp/active-routing.json"
+jq -e '.deliveryMode == "idle-all-batch" and .queueOrder == "lifo" and .feedEnabled == true' \
   <<<"$("$cli" state)" >/dev/null
 curl -fsS -X POST -H 'Content-Type: application/json' \
   --data '{"action":"stop"}' http://127.0.0.1:47832/api/feed \

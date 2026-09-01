@@ -173,6 +173,41 @@ def targets_payload() -> dict[str, object]:
     }
 
 
+DELIVERY_MODES = frozenset({
+    "idle-active-next", "idle-active-batch", "idle-all-next", "idle-all-batch",
+})
+QUEUE_ORDERS = frozenset({"fifo", "lifo"})
+
+
+def configure_routing(target_id: str, mode: str, order: str) -> dict[str, str]:
+    """Validate and atomically replace the stopped feed's routing settings."""
+    if mode not in DELIVERY_MODES:
+        raise ValueError("unsupported delivery mode")
+    if order not in QUEUE_ORDERS:
+        raise ValueError("unsupported queue order")
+    targets, error = herdr_targets()
+    if error:
+        raise ValueError(error)
+    target = next((item for item in targets if item["id"] == target_id), None)
+    if not target:
+        raise ValueError("Herdr target is no longer available")
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if setting(db, "feed_enabled", "0") == "1":
+            raise ValueError("stop the feed before changing routing")
+        set_setting(db, "delivery_target", target_id)
+        set_setting(db, "delivery_target_label", str(target["label"]))
+        set_setting(db, "delivery_mode", mode)
+        set_setting(db, "queue_order", order)
+        db.commit()
+    return {
+        "targetId": target_id,
+        "targetLabel": str(target["label"]),
+        "deliveryMode": mode,
+        "queueOrder": order,
+    }
+
+
 def select_target(args: argparse.Namespace) -> None:
     payload = targets_payload()
     targets = payload["targets"]

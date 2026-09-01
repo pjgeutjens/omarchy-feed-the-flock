@@ -38,7 +38,7 @@ from .common import (
     run_bounded,
     run_quiet,
 )
-from .feed import deliver_note, feed_control, targets_payload
+from .feed import configure_routing, deliver_note, feed_control, targets_payload
 from .store import (
     active_bucket,
     add_bucket,
@@ -851,6 +851,14 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     db.commit()
                 path.unlink(missing_ok=True)
                 self.json_response(200, {"ok": True})
+                return
+            if parsed.path == "/api/routing":
+                result = configure_routing(
+                    str(value.get("targetId", "")),
+                    str(value.get("deliveryMode", "")),
+                    str(value.get("queueOrder", "")),
+                )
+                self.json_response(200, result)
                 return
             if parsed.path == "/api/feed":
                 action = str(value.get("action", ""))

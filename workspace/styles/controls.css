@@ -80,12 +80,18 @@ section.feed-current h2, section.feed-queued h2 { color: var(--accent); }
   color: var(--muted); font-size: 17px; line-height: 1;
 }
 .target-value {
-  padding: 6px 10px;
+  min-width: 0; padding: 6px 10px;
   border: 1px solid var(--faint);
   border-radius: 6px;
   background: #181b22;
   color: var(--text);
-  font-size: 14px;
+  font: 14px/1.35 ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.routing-trigger { cursor: pointer; }
+.routing-trigger:hover, .routing-trigger:focus-visible {
+  border-color: var(--accent); outline: none;
+  background: color-mix(in srgb, var(--accent) 8%, #181b22);
 }
 .feed-toggle {
   flex: none; min-width: 72px; padding: 5px 9px;

@@ -35,7 +35,8 @@
     <div class="delivery-block">
       <div class="target-row delivery-row">
         <label title="Deliver to" aria-label="Deliver to">→</label>
-        <span id="target-name" class="target-value">Target unavailable</span>
+        <button id="target-name" class="target-value routing-trigger" type="button"
+          aria-haspopup="dialog" title="Configure delivery routing">Target unavailable</button>
       </div>
       <div id="bucket-stats" class="bucket-stats" aria-live="polite">
         <span id="bucket-stats-text">Loading counts…</span>
@@ -63,6 +64,36 @@
         <button id="modal-cancel" class="modal-button" type="button">Cancel</button>
         <button id="modal-secondary" class="modal-button danger" type="button" hidden></button>
         <button id="modal-confirm" class="modal-button primary" type="submit">Confirm</button>
+      </div>
+    </form>
+  </div>
+  <div id="routing-backdrop" class="modal-backdrop" hidden>
+    <form id="routing-card" class="modal-card routing-card" role="dialog" aria-modal="true"
+      aria-labelledby="routing-title">
+      <div class="modal-eyebrow"><span class="brand-icon">󰆚</span> Feed the Flock</div>
+      <h2 id="routing-title">Delivery routing</h2>
+      <p class="modal-message">Changes apply together and only while the feed is stopped.</p>
+      <div class="routing-fields">
+        <label class="routing-field">
+          <span>Target</span>
+          <select id="routing-target" required></select>
+          <small id="routing-target-help"></small>
+        </label>
+        <label class="routing-field">
+          <span>Mode</span>
+          <select id="routing-mode"></select>
+          <small id="routing-mode-help"></small>
+        </label>
+        <label class="routing-field">
+          <span>Order</span>
+          <select id="routing-order"></select>
+          <small id="routing-order-help"></small>
+        </label>
+      </div>
+      <p id="routing-message" class="routing-message" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="routing-cancel" class="modal-button" type="button">Cancel</button>
+        <button id="routing-apply" class="modal-button primary" type="submit">Apply routing</button>
       </div>
     </form>
   </div>

@@ -15,6 +15,7 @@ This directory is the dependency-free HTML viewer for Feed the Flock. It is serv
 | Narrow-screen adaptations | `styles/responsive.css` |
 | API transport and HTTP error handling | `js/api.js` |
 | Accessible modal behavior and focus trapping | `js/modal.js` |
+| Atomic target, mode, and order routing dialog | `js/routing.js` |
 | Omarchy color loading | `js/theme.js` |
 | Workspace state, controls, rendering, drag/drop, and live refresh | `js/app.js` |
 | JSON endpoints, SQLite mutations, SSE, and static serving | `../bin/feed_the_flock/workspace.py` |
@@ -52,6 +53,7 @@ The important section fields are `feedCurrent` (persisted selection), `feedActiv
 - Deleting another section must explicitly choose moving notes to the fallback or discarding them.
 - A section is promoted visually only while its feed is active; after draining it returns to document order.
 - Starting from the viewer targets the visible bucket without changing the compact panel's browsing selection.
+- Workspace routing changes require an explicit Apply, update target/mode/order atomically, and are rejected while feeding is active.
 - FIFO/LIFO order is provided by the backend and must not be reconstructed differently in the browser.
 - Use specific component selectors such as `.section-action.feed-now` or `.note-action.feed-now`; avoid broad class selectors that can collide.
 

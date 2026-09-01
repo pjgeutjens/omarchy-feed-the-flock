@@ -1,5 +1,6 @@
 import { request } from './api.js';
 import { isModalOpen, requestConfirmation, requestText } from './modal.js';
+import { isRoutingOpen, openRouting } from './routing.js';
 import { loadTheme } from './theme.js';
 
 const params = new URLSearchParams(location.search);
@@ -208,8 +209,8 @@ async function loadTargets() {
     const selected = (data.targets || []).find(target => target.id === selectedTargetId);
     targetNameEl.textContent = data.selectedTargetLabel || selected?.label || 'Disconnected target';
     targetNameEl.title = selected
-      ? `${selected.label} — ${selected.status}`
-      : 'Select another target in the Feed the Flock plugin';
+      ? `${selected.label} — ${selected.status} · Click to configure routing`
+      : 'Click to configure delivery routing';
     if (currentDocument?.feedEnabled && selected && !selected.available) {
       setStatus(`Feed waiting · ${selected.label} is ${selected.status}`);
     } else if (currentDocument?.feedEnabled && selected?.available) {
@@ -219,6 +220,14 @@ async function loadTargets() {
     targetNameEl.textContent = 'Target unavailable';
   }
 }
+
+targetNameEl.addEventListener('click', () => openRouting({
+  onApplied: async () => {
+    await loadTargets();
+    await load();
+    showToast('Routing updated');
+  }
+}));
 
 function beginEditing(element, selectAll = false, provisional = false) {
   delete element.dataset.cancelEdit;
@@ -977,7 +986,7 @@ function renderFeedQueue(data) {
 }
 
 async function load() {
-  if (isModalOpen() || draggingId || draggingSectionId) return;
+  if (isModalOpen() || isRoutingOpen() || draggingId || draggingSectionId) return;
   try {
     const data = await request(`/api/bucket?id=${encodeURIComponent(bucketId)}`);
     const draft = editingSnapshot();
@@ -1007,7 +1016,7 @@ async function load() {
 
 document.addEventListener('keydown', event => {
   if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey
-      || editing || isModalOpen()) return;
+      || editing || isModalOpen() || isRoutingOpen()) return;
   const active = document.activeElement;
   if (active?.matches('input, textarea, select, [contenteditable="true"]')) return;
   if (event.key === 'i' || event.key === 'I') {
