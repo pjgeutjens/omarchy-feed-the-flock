@@ -17,8 +17,6 @@ import tomllib
 import urllib.parse
 import urllib.request
 import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -48,7 +46,7 @@ from .store import (
     add_note_to_db,
     add_section,
     checked_note_text,
-    connect as open_store_connection,
+    connect,
     delete_bucket,
     delete_section,
     ensure_unsorted_section,
@@ -65,17 +63,6 @@ from .store import (
     set_setting,
     setting,
 )
-
-
-@contextmanager
-def connect() -> Iterator[sqlite3.Connection]:
-    """Open one transactional store connection and always close its descriptors."""
-    db = open_store_connection()
-    try:
-        with db:
-            yield db
-    finally:
-        db.close()
 
 
 def database_signature() -> tuple[tuple[int, int, int] | None, ...]:

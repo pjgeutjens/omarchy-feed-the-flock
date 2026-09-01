@@ -7,6 +7,8 @@ import re
 import sqlite3
 import time
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from .common import DB_PATH, DEFAULT_BUCKETS, STATE_DIR
@@ -45,7 +47,7 @@ def ensure_unsorted_section(db: sqlite3.Connection, bucket_id: str) -> str:
     return section_id
 
 
-def connect() -> sqlite3.Connection:
+def _open_connection() -> sqlite3.Connection:
     STATE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     STATE_DIR.chmod(0o700)
     try:
@@ -187,6 +189,17 @@ def connect() -> sqlite3.Connection:
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('feed_resume_after', '0')")
     db.commit()
     return db
+
+
+@contextmanager
+def connect() -> Iterator[sqlite3.Connection]:
+    """Open one transactional store connection and always close its descriptors."""
+    db = _open_connection()
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
 
 
 def remove_note_attachments(db: sqlite3.Connection, note_ids: list[str]) -> list[Path]:

@@ -36,6 +36,7 @@ done
 sleep 0.5
 for index in {1..30}; do
   curl -fsS http://127.0.0.1:47832/api/buckets >/dev/null
+  curl -fsS http://127.0.0.1:47832/api/targets >/dev/null
   "$cli" state >/dev/null
   "$cli" note add "Connection lifecycle $index"
 done
