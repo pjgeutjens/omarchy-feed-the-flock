@@ -63,6 +63,66 @@ def remote_request(endpoint: str, arguments: list[str], *, limit: int = 12 * 102
         raise ValueError("remote Feed the Flock returned invalid data") from error
 
 
+def _plain(value: object, maximum: int, *, multiline: bool = False) -> str:
+    pattern = r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]" if multiline else r"[\x00-\x1f\x7f]"
+    text = re.sub(pattern, "", str(value))
+    return text[:maximum] if multiline else text.replace("<", "‹").replace(">", "›")[:maximum]
+
+
+def _safe_id(value: object) -> str:
+    identifier = str(value)
+    if not ID_PATTERN.fullmatch(identifier):
+        raise ValueError("remote feeder returned an invalid identifier")
+    return identifier
+
+
+def _sanitize_remote_state(value: dict[str, object]) -> None:
+    raw_buckets = value.get("buckets", [])
+    raw_sections = value.get("sections", [])
+    raw_notes = value.get("notes", [])
+    if not isinstance(raw_buckets, list) or len(raw_buckets) > 100 \
+            or not isinstance(raw_sections, list) or len(raw_sections) > 200 \
+            or not isinstance(raw_notes, list) or len(raw_notes) > 200:
+        raise ValueError("remote feeder state exceeds the record limit")
+    buckets: list[dict[str, object]] = []
+    for item in raw_buckets:
+        if not isinstance(item, dict):
+            raise ValueError("remote feeder returned invalid bucket data")
+        buckets.append({
+            **item, "id": _safe_id(item.get("id", "")),
+            "name": _plain(item.get("name", ""), 80),
+        })
+    sections: list[dict[str, object]] = []
+    for item in raw_sections:
+        if not isinstance(item, dict):
+            raise ValueError("remote feeder returned invalid section data")
+        sections.append({
+            **item, "id": _safe_id(item.get("id", "")),
+            "name": _plain(item.get("name", ""), 80),
+        })
+    notes: list[dict[str, object]] = []
+    for item in raw_notes:
+        if not isinstance(item, dict):
+            raise ValueError("remote feeder returned invalid note data")
+        notes.append({
+            **item, "id": _safe_id(item.get("id", "")),
+            "sectionId": _safe_id(item.get("sectionId", "")),
+            "text": _plain(item.get("text", ""), 65536, multiline=True),
+        })
+    value["buckets"], value["sections"], value["notes"] = buckets, sections, notes
+    for key in (
+        "activeBucketId", "activeSectionId", "feedBucketId", "feedSectionId",
+        "nextFeedBucketId", "nextFeedSectionId",
+    ):
+        raw = str(value.get(key, ""))
+        value[key] = _safe_id(raw) if raw else ""
+    for key in (
+        "error", "captureBucketName", "captureSectionName", "feedBucketName",
+        "feedSectionName", "nextFeedBucketName", "nextFeedSectionName",
+    ):
+        value[key] = _plain(value.get(key, ""), 160)
+
+
 def remote_state(endpoint: str, bucket_id: str = "", section_id: str = "") -> dict[str, object]:
     arguments = ["_remote-state"]
     if bucket_id:
@@ -72,6 +132,7 @@ def remote_state(endpoint: str, bucket_id: str = "", section_id: str = "") -> di
     value = remote_request(endpoint, arguments)
     if not isinstance(value, dict) or not isinstance(value.get("buckets"), list):
         raise ValueError("remote state has an unexpected shape")
+    _sanitize_remote_state(value)
     value["remoteMode"] = True
     value["remoteEndpoint"] = endpoint
     value["readOnly"] = True
@@ -152,6 +213,42 @@ def remote_workspace_payload(kind: str, identifier: str = "") -> object:
     value = remote_request(endpoint, arguments)
     if not isinstance(value, dict):
         raise ValueError("remote workspace returned invalid data")
+    if kind == "buckets":
+        raw_buckets = value.get("buckets", [])
+        if not isinstance(raw_buckets, list) or len(raw_buckets) > 100:
+            raise ValueError("remote workspace returned too many buckets")
+        value["buckets"] = [
+            {
+                **bucket, "id": _safe_id(bucket.get("id", "")),
+                "name": _plain(bucket.get("name", ""), 80),
+            }
+            for bucket in raw_buckets if isinstance(bucket, dict)
+        ]
+        if len(value["buckets"]) != len(raw_buckets):
+            raise ValueError("remote workspace returned invalid bucket data")
+    else:
+        sections = value.get("sections", [])
+        if not isinstance(sections, list) or len(sections) > 200:
+            raise ValueError("remote workspace returned too many sections")
+        note_count = 0
+        for section in sections:
+            if not isinstance(section, dict):
+                raise ValueError("remote workspace returned invalid section data")
+            section["id"] = _safe_id(section.get("id", ""))
+            section["name"] = _plain(section.get("name", ""), 80)
+            notes = section.get("notes", [])
+            if not isinstance(notes, list):
+                raise ValueError("remote workspace returned invalid note data")
+            note_count += len(notes)
+            if note_count > 20_000:
+                raise ValueError("remote workspace returned too many notes")
+            for note in notes:
+                if not isinstance(note, dict):
+                    raise ValueError("remote workspace returned invalid note data")
+                note["id"] = _safe_id(note.get("id", ""))
+                note["text"] = _plain(note.get("text", ""), 65536, multiline=True)
+                note["attachments"] = []
+        value["name"] = _plain(value.get("name", ""), 80)
     value["readOnly"] = True
     value["remoteEndpoint"] = endpoint
     return value
