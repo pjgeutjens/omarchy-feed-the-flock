@@ -17,12 +17,15 @@ import tomllib
 import urllib.parse
 import urllib.request
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .common import (
     ATTACHMENT_DIR,
+    DB_PATH,
     ENTRYPOINT,
     EXPORT_DIR,
     OMARCHY_SYSTEM_THEMES,
@@ -45,7 +48,7 @@ from .store import (
     add_note_to_db,
     add_section,
     checked_note_text,
-    connect,
+    connect as open_store_connection,
     delete_bucket,
     delete_section,
     ensure_unsorted_section,
@@ -62,6 +65,30 @@ from .store import (
     set_setting,
     setting,
 )
+
+
+@contextmanager
+def connect() -> Iterator[sqlite3.Connection]:
+    """Open one transactional store connection and always close its descriptors."""
+    db = open_store_connection()
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
+
+
+def database_signature() -> tuple[tuple[int, int, int] | None, ...]:
+    """Observe SQLite changes without holding its replaceable WAL sidecar open."""
+    signature: list[tuple[int, int, int] | None] = []
+    for path in (DB_PATH, Path(f"{DB_PATH}-wal")):
+        try:
+            stat = path.stat()
+            signature.append((stat.st_ino, stat.st_size, stat.st_mtime_ns))
+        except FileNotFoundError:
+            signature.append(None)
+    return tuple(signature)
+
 
 @dataclass
 class ImportedNote:
@@ -662,28 +689,28 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 self.send_header("Connection", "keep-alive")
                 self.end_headers()
                 try:
-                    with connect() as db:
-                        version = db.execute("PRAGMA data_version").fetchone()[0]
-                        elapsed = 0.0
-                        total_elapsed = 0.0
-                        self.wfile.write(b"retry: 1000\n\n")
-                        self.wfile.flush()
-                        while total_elapsed < 300:
-                            time.sleep(0.5)
-                            elapsed += 0.5
-                            total_elapsed += 0.5
-                            current = db.execute("PRAGMA data_version").fetchone()[0]
-                            if current != version:
-                                version = current
-                                self.wfile.write(b"event: change\ndata: updated\n\n")
-                                self.wfile.flush()
-                                elapsed = 0.0
-                            elif elapsed >= 15:
-                                self.wfile.write(b": keepalive\n\n")
-                                self.wfile.flush()
-                                elapsed = 0.0
-                except (BrokenPipeError, ConnectionResetError, sqlite3.Error):
+                    version = database_signature()
+                    elapsed = 0.0
+                    total_elapsed = 0.0
+                    self.wfile.write(b"retry: 1000\n\n")
+                    self.wfile.flush()
+                    while total_elapsed < 300:
+                        time.sleep(0.5)
+                        elapsed += 0.5
+                        total_elapsed += 0.5
+                        current = database_signature()
+                        if current != version:
+                            version = current
+                            self.wfile.write(b"event: change\ndata: updated\n\n")
+                            self.wfile.flush()
+                            elapsed = 0.0
+                        elif elapsed >= 15:
+                            self.wfile.write(b": keepalive\n\n")
+                            self.wfile.flush()
+                            elapsed = 0.0
+                except (BrokenPipeError, ConnectionResetError, OSError):
                     return
+                return
             if parsed.path == "/api/bucket/export":
                 bucket_id = urllib.parse.parse_qs(parsed.query).get("id", [""])[0]
                 with connect() as db:
@@ -1011,9 +1038,14 @@ class BoundedWorkspaceServer(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 16
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        request_handler: type[BaseHTTPRequestHandler],
+        bind_and_activate: bool = True,
+    ) -> None:
         self._request_slots = threading.BoundedSemaphore(16)
-        super().__init__(*args, **kwargs)
+        super().__init__(server_address, request_handler, bind_and_activate)
 
     def process_request(self, request: socket.socket, client_address: object) -> None:
         if not self._request_slots.acquire(blocking=False):

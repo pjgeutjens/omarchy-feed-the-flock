@@ -25,6 +25,36 @@ for _ in {1..30}; do
   curl -fsS http://127.0.0.1:47832/js/app.js >/dev/null 2>&1 && break
   sleep 0.1
 done
+
+# Event streams and ordinary API requests must release every SQLite descriptor.
+baseline_fds=$(find "/proc/$server/fd" -maxdepth 1 -type l | wc -l)
+sse_clients=()
+for index in {1..4}; do
+  timeout 3 curl -sN http://127.0.0.1:47832/api/events >"$tmp/events-$index" 2>/dev/null &
+  sse_clients+=("$!")
+done
+sleep 0.5
+for index in {1..30}; do
+  curl -fsS http://127.0.0.1:47832/api/buckets >/dev/null
+  "$cli" state >/dev/null
+  "$cli" note add "Connection lifecycle $index"
+done
+for client in "${sse_clients[@]}"; do wait "$client" || true; done
+grep -Fq 'event: change' "$tmp/events-1"
+# The server discovers a closed SSE client on its next 15-second keepalive.
+sleep 16
+curl -fsS http://127.0.0.1:47832/api/buckets >/dev/null
+if find "/proc/$server/fd" -maxdepth 1 -type l -lname '*agent-feed.db-* (deleted)' | grep -q .; then
+  echo "workspace retained deleted SQLite sidecar descriptors" >&2
+  find "/proc/$server/fd" -maxdepth 1 -type l -lname '*agent-feed.db-* (deleted)' -printf '%f -> %l\n' >&2
+  exit 1
+fi
+after_fds=$(find "/proc/$server/fd" -maxdepth 1 -type l | wc -l)
+(( after_fds <= baseline_fds + 4 )) || {
+  echo "workspace descriptor count grew from $baseline_fds to $after_fds" >&2
+  exit 1
+}
+
 [[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' \
   http://127.0.0.1:47832/api/buckets) == 400 ]]
 [[ $(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: evil.example' \
