@@ -65,16 +65,13 @@ from .store import (
 )
 
 
-def database_signature() -> tuple[tuple[int, int, int] | None, ...]:
-    """Observe SQLite changes without holding its replaceable WAL sidecar open."""
-    signature: list[tuple[int, int, int] | None] = []
-    for path in (DB_PATH, Path(f"{DB_PATH}-wal")):
-        try:
-            stat = path.stat()
-            signature.append((stat.st_ino, stat.st_size, stat.st_mtime_ns))
-        except FileNotFoundError:
-            signature.append(None)
-    return tuple(signature)
+def database_signature() -> tuple[int, int, int] | None:
+    """Observe committed rollback-journal changes without opening SQLite."""
+    try:
+        stat = DB_PATH.stat()
+        return stat.st_ino, stat.st_size, stat.st_mtime_ns
+    except FileNotFoundError:
+        return None
 
 
 @dataclass

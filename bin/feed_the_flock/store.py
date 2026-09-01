@@ -60,17 +60,11 @@ def _open_connection() -> sqlite3.Connection:
     DB_PATH.chmod(0o600)
     db = sqlite3.connect(DB_PATH, timeout=10)
     db.row_factory = sqlite3.Row
-    db.execute("PRAGMA journal_mode=WAL")
-    for suffix in ("-wal", "-shm"):
-        sidecar = Path(str(DB_PATH) + suffix)
-        try:
-            sidecar_descriptor = os.open(sidecar, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
-        except FileNotFoundError:
-            continue
-        try:
-            os.fchmod(sidecar_descriptor, 0o600)
-        finally:
-            os.close(sidecar_descriptor)
+    db.execute("PRAGMA busy_timeout=10000")
+    journal_mode = str(db.execute("PRAGMA journal_mode=DELETE").fetchone()[0]).lower()
+    if journal_mode != "delete":
+        db.close()
+        raise sqlite3.OperationalError("could not enable safe SQLite rollback journaling")
     db.executescript(
         """
         CREATE TABLE IF NOT EXISTS buckets (

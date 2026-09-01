@@ -16,7 +16,25 @@ fi
 EOF
 chmod +x "$tmp/herdr"
 cli="$root/bin/feed-the-flock"
+mkdir -p "$AGENT_FEED_STATE_DIR"
+python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+import sqlite3
+import sys
+with sqlite3.connect(sys.argv[1]) as db:
+    assert db.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+    db.execute("CREATE TABLE migration_probe(value TEXT)")
+    db.execute("INSERT INTO migration_probe(value) VALUES ('preserved')")
+PY
 "$cli" init
+python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+import sqlite3
+import sys
+with sqlite3.connect(sys.argv[1]) as db:
+    assert db.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+    assert db.execute("SELECT value FROM migration_probe").fetchone()[0] == "preserved"
+PY
+[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-wal ]]
+[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-shm ]]
 "$cli" note add 'Viewer feed control test'
 "$cli" bucket select ideas
 "$cli" target select herdr:w1:p2
@@ -51,10 +69,37 @@ if find "/proc/$server/fd" -maxdepth 1 -type l -lname '*agent-feed.db-* (deleted
   exit 1
 fi
 after_fds=$(find "/proc/$server/fd" -maxdepth 1 -type l | wc -l)
+[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-wal ]]
+[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-shm ]]
 (( after_fds <= baseline_fds + 4 )) || {
   echo "workspace descriptor count grew from $baseline_fds to $after_fds" >&2
   exit 1
 }
+
+# Exercise simultaneous threaded readers and short-lived CLI writers.
+stress_workers=()
+for worker in {1..4}; do
+  (
+    for index in {1..12}; do
+      curl -fsS http://127.0.0.1:47832/api/buckets >/dev/null
+      curl -fsS http://127.0.0.1:47832/api/targets >/dev/null
+      "$cli" note add "Concurrent lifecycle $worker.$index"
+      "$cli" state >/dev/null
+    done
+  ) &
+  stress_workers+=("$!")
+done
+for worker in "${stress_workers[@]}"; do wait "$worker"; done
+kill -0 "$server"
+python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+import sqlite3
+import sys
+with sqlite3.connect(sys.argv[1]) as db:
+    assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert db.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+PY
+[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-wal ]]
+[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-shm ]]
 
 curl -fsS http://127.0.0.1:47832/api/targets \
   | jq -e '.selectedTargetId == "herdr:w1:p2"
