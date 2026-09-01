@@ -18,6 +18,32 @@ function icon(value) {
   }
 }
 
+function targetDropdownOptions(values) {
+  var options = []
+  for (var i = 0; i < values.length; i++) {
+    var target = values[i]
+    options.push({
+      "value": String(target.id || ""),
+      "label": String(target.label || "Unnamed target"),
+      "description": "Herdr · " + String(target.status || "unknown")
+    })
+  }
+  return options
+}
+
+function hintedDropdownOptions(values) {
+  var options = []
+  for (var i = 0; i < values.length; i++) {
+    var item = values[i]
+    options.push({
+      "value": String(item.id || ""),
+      "label": String(item.label || item.id || ""),
+      "description": String(item.hint || "")
+    })
+  }
+  return options
+}
+
 function tooltip(value, count) {
   switch (normalizePhase(value)) {
   case "recording": return "Feed the Flock · Recording…"

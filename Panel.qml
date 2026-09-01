@@ -4,6 +4,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "." as AgentFeedCore
+import "AgentFeedPresentation.js" as Presentation
 
 Panel {
   id: root
@@ -101,41 +102,17 @@ Panel {
     AgentFeedCore.AgentFeedState.moveSection(AgentFeedCore.AgentFeedState.activeSectionId, direction)
   }
 
-  function selectedDeliveryTargetIndex() {
-    var values = AgentFeedCore.AgentFeedState.deliveryTargets
-    for (var i = 0; i < values.length; i++)
-      if (values[i].id === AgentFeedCore.AgentFeedState.selectedDeliveryTargetId) return i
-    return 0
-  }
-
   function openDeliveryTargetPicker() {
     if (AgentFeedCore.AgentFeedState.deliveryTargets.length === 0) return
-    targetPicker.forceActiveFocus()
-    targetPicker.popup.open()
-  }
-
-  function selectedDeliveryModeIndex() {
-    var values = AgentFeedCore.AgentFeedState.deliveryModes
-    for (var i = 0; i < values.length; i++)
-      if (values[i].id === AgentFeedCore.AgentFeedState.deliveryMode) return i
-    return 0
+    targetPicker.open()
   }
 
   function openDeliveryModePicker() {
-    modePicker.forceActiveFocus()
-    modePicker.popup.open()
-  }
-
-  function selectedQueueOrderIndex() {
-    var values = AgentFeedCore.AgentFeedState.queueOrders
-    for (var i = 0; i < values.length; i++)
-      if (values[i].id === AgentFeedCore.AgentFeedState.queueOrder) return i
-    return 0
+    modePicker.open()
   }
 
   function openQueueOrderPicker() {
-    orderPicker.forceActiveFocus()
-    orderPicker.popup.open()
+    orderPicker.open()
   }
 
   function submitBucket() {
@@ -256,6 +233,7 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: root.notesOpen || keybindingsOverlay.inputFocused
+        || targetPicker.popupOpen || modePicker.popupOpen || orderPicker.popupOpen
         || newBucketField.activeFocus || newSectionField.activeFocus
       onMoveRequested: function(dx, dy) {
         if (!root.helpOpen && dx !== 0) root.cycleBucket(dx)
@@ -777,90 +755,53 @@ Panel {
             onClicked: AgentFeedCore.AgentFeedState.openBucket()
           }
 
-          Row {
+          SearchableDropdown {
+            id: targetPicker
             width: parent.width
-            spacing: Style.space(7)
-            Text {
-              width: Style.space(58)
-              anchors.verticalCenter: parent.verticalCenter
-              text: "TARGET"
-              textFormat: Text.PlainText
-              color: root.dimForeground
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-            }
-            ComboBox {
-              id: targetPicker
-              width: parent.width - Style.space(65)
-              height: Style.space(32)
-              model: AgentFeedCore.AgentFeedState.deliveryTargets
-              textRole: "label"
-              valueRole: "id"
-              currentIndex: root.selectedDeliveryTargetIndex()
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.bodySmall
-              enabled: !AgentFeedCore.AgentFeedState.busy && model.length > 0
-              displayText: AgentFeedCore.AgentFeedState.selectedDeliveryTargetLabel
-              onActivated: function(index) {
-                var target = AgentFeedCore.AgentFeedState.deliveryTargets[index]
-                if (target) AgentFeedCore.AgentFeedState.selectDeliveryTarget(target.id)
-                keyCatcher.forceActiveFocus()
-              }
-              delegate: ItemDelegate {
-                required property var modelData
-                width: targetPicker.width
-                text: modelData.kind === "herdr"
-                  ? modelData.label + "  ·  " + modelData.status : modelData.label
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                highlighted: targetPicker.highlightedIndex === index
-              }
+            height: implicitHeight
+            label: "TARGET"
+            value: AgentFeedCore.AgentFeedState.selectedDeliveryTargetId
+            options: Presentation.targetDropdownOptions(AgentFeedCore.AgentFeedState.deliveryTargets)
+            triggerLabel: AgentFeedCore.AgentFeedState.selectedDeliveryTargetLabel
+            placeholderText: "Filter Herdr targets..."
+            popupRowHeight: Style.space(42)
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            enabled: !AgentFeedCore.AgentFeedState.busy && options.length > 0
+            opacity: enabled ? 1 : 0.55
+            onChanged: function(targetId) {
+              AgentFeedCore.AgentFeedState.selectDeliveryTarget(targetId)
+              keyCatcher.forceActiveFocus()
             }
           }
 
           Row {
             width: parent.width
             spacing: Style.space(7)
-            Text {
-              width: Style.space(58)
-              anchors.verticalCenter: parent.verticalCenter
-              text: "MODE"
-              textFormat: Text.PlainText
-              color: root.dimForeground
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-            }
-            ComboBox {
+
+            SearchableDropdown {
               id: modePicker
-              width: parent.width - feedButton.width - Style.space(72)
-              height: Style.space(32)
-              model: AgentFeedCore.AgentFeedState.deliveryModes
-              textRole: "label"
-              valueRole: "id"
-              currentIndex: root.selectedDeliveryModeIndex()
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.bodySmall
+              width: parent.width - feedButton.width - parent.spacing
+              height: implicitHeight
+              label: "MODE"
+              value: AgentFeedCore.AgentFeedState.deliveryMode
+              options: Presentation.hintedDropdownOptions(AgentFeedCore.AgentFeedState.deliveryModes)
+              placeholderText: "Filter delivery modes..."
+              popupRowHeight: Style.space(42)
+              foreground: root.contentForeground
+              fontFamily: root.contentFontFamily
               enabled: !AgentFeedCore.AgentFeedState.busy
-              onActivated: function(index) {
-                var mode = AgentFeedCore.AgentFeedState.deliveryModes[index]
-                if (mode) AgentFeedCore.AgentFeedState.selectDeliveryMode(mode.id)
+              onChanged: function(modeId) {
+                AgentFeedCore.AgentFeedState.selectDeliveryMode(modeId)
                 keyCatcher.forceActiveFocus()
               }
-              delegate: ItemDelegate {
-                required property var modelData
-                width: modePicker.width
-                text: modelData.label + "  —  " + modelData.hint
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                highlighted: modePicker.highlightedIndex === index
-              }
             }
+
             Button {
               id: feedButton
               width: Style.space(86)
               height: Style.space(32)
+              anchors.bottom: parent.bottom
               text: (AgentFeedCore.AgentFeedState.feedEnabled ? "■ ON" : "▶ OFF")
                 + " · Q " + AgentFeedCore.AgentFeedState.pendingCount
               bordered: true
@@ -872,43 +813,21 @@ Panel {
             }
           }
 
-          Row {
+          SearchableDropdown {
+            id: orderPicker
             width: parent.width
-            spacing: Style.space(7)
-            Text {
-              width: Style.space(58)
-              anchors.verticalCenter: parent.verticalCenter
-              text: "ORDER"
-              textFormat: Text.PlainText
-              color: root.dimForeground
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-            }
-            ComboBox {
-              id: orderPicker
-              width: parent.width - Style.space(65)
-              height: Style.space(32)
-              model: AgentFeedCore.AgentFeedState.queueOrders
-              textRole: "label"
-              valueRole: "id"
-              currentIndex: root.selectedQueueOrderIndex()
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.bodySmall
-              enabled: !AgentFeedCore.AgentFeedState.busy
-              onActivated: function(index) {
-                var order = AgentFeedCore.AgentFeedState.queueOrders[index]
-                if (order) AgentFeedCore.AgentFeedState.selectQueueOrder(order.id)
-                keyCatcher.forceActiveFocus()
-              }
-              delegate: ItemDelegate {
-                required property var modelData
-                width: orderPicker.width
-                text: modelData.label + "  —  " + modelData.hint
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                highlighted: orderPicker.highlightedIndex === index
-              }
+            height: implicitHeight
+            label: "ORDER"
+            value: AgentFeedCore.AgentFeedState.queueOrder
+            options: Presentation.hintedDropdownOptions(AgentFeedCore.AgentFeedState.queueOrders)
+            placeholderText: "Filter queue orders..."
+            popupRowHeight: Style.space(42)
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            enabled: !AgentFeedCore.AgentFeedState.busy
+            onChanged: function(orderId) {
+              AgentFeedCore.AgentFeedState.selectQueueOrder(orderId)
+              keyCatcher.forceActiveFocus()
             }
           }
 

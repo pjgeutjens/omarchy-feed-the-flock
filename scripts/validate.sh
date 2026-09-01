@@ -30,6 +30,19 @@ for branded_file in AgentFeedPresentation.js Panel.qml workspace/index.html; do
     exit 1
   fi
 done
+[[ $(grep -Fc 'SearchableDropdown {' "$plugin_dir/Panel.qml") -eq 3 ]] || {
+  echo "Panel.qml must use Omarchy SearchableDropdown for all three routing controls" >&2
+  exit 1
+}
+if grep -Fq 'ComboBox {' "$plugin_dir/Panel.qml"; then
+  echo "Panel.qml still contains a platform-native ComboBox" >&2
+  exit 1
+fi
+grep -Fq 'targetPicker.popupOpen || modePicker.popupOpen || orderPicker.popupOpen' \
+  "$plugin_dir/Panel.qml" || {
+    echo "Panel key handling must pause while a routing dropdown is open" >&2
+    exit 1
+  }
 for asset in styles/theme.css styles/controls.css styles/overlays.css styles/document.css \
              styles/notes.css styles/responsive.css js/app.js; do
   grep -Fq "\"/$asset\"" "$plugin_dir/workspace/index.html" || {
