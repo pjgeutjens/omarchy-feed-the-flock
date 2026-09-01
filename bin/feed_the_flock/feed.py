@@ -57,8 +57,18 @@ def parse_herdr_targets(output: bytes) -> list[dict[str, object]]:
         pane_id = str(agent.get("pane_id", ""))
         if not re.fullmatch(r"[A-Za-z0-9]+:p[A-Za-z0-9]+", pane_id):
             continue
-        status = safe_label(agent.get("agent_status", "unknown"), 40)
+        raw_status = safe_label(agent.get("agent_status", "unknown"), 40)
         name = safe_label(agent.get("agent", "agent"), 80)
+        session = agent.get("agent_session")
+        lifecycle_tracked = (
+            isinstance(session, dict)
+            and str(session.get("source", "")).startswith("herdr:")
+            and bool(str(session.get("value", "")))
+        )
+        status = raw_status if lifecycle_tracked else "untracked"
+        state_change_seq = agent.get("state_change_seq", 0)
+        if not isinstance(state_change_seq, int) or state_change_seq < 0:
+            state_change_seq = 0
         tab_label = tabs.get(str(agent.get("tab_id", "")), "")
         context = safe_label(
             tab_label
@@ -70,9 +80,15 @@ def parse_herdr_targets(output: bytes) -> list[dict[str, object]]:
         targets.append({
             "id": f"herdr:{pane_id}",
             "kind": "herdr",
+            "agent": name,
             "label": f"{name} · {context}",
             "status": status,
-            "available": status in {"idle", "done"},
+            "available": lifecycle_tracked and status in {"idle", "done"},
+            "lifecycleTracked": lifecycle_tracked,
+            "stateChangeSeq": state_change_seq,
+            "waitError": "" if lifecycle_tracked else (
+                f"{name} lifecycle is not tracked; run: herdr integration install {name}"
+            ),
             "paneId": pane_id,
         })
     return targets
@@ -144,6 +160,51 @@ def herdr_targets() -> tuple[list[dict[str, object]], str]:
     return local_targets, error
 
 
+def read_active_note_ids(db: sqlite3.Connection) -> list[str]:
+    try:
+        value = json.loads(setting(db, "active_delivery_notes", "[]"))
+    except json.JSONDecodeError:
+        return []
+    return [str(note_id) for note_id in value] if isinstance(value, list) else []
+
+
+def clear_active_delivery(db: sqlite3.Connection) -> None:
+    set_setting(db, "active_delivery_notes", "[]")
+    set_setting(db, "active_delivery_target", "")
+    set_setting(db, "active_delivery_started", "0")
+    set_setting(db, "active_delivery_observed", "0")
+    set_setting(db, "active_delivery_state_seq", "0")
+
+
+def active_delivery_pending(
+    db: sqlite3.Connection, target_id: str, target: dict[str, object] | None
+) -> bool:
+    note_ids = read_active_note_ids(db)
+    if not note_ids or setting(db, "active_delivery_target", "") != target_id:
+        return False
+    if target is None:
+        clear_active_delivery(db)
+        db.commit()
+        return False
+    if not bool(target.get("lifecycleTracked")):
+        return True
+    observed = setting(db, "active_delivery_observed", "0") == "1"
+    baseline = int(setting(db, "active_delivery_state_seq", "0") or "0")
+    current_seq = int(target.get("stateChangeSeq", 0) or 0)
+    status = str(target.get("status", "unknown"))
+    available = bool(target.get("available"))
+    if not available:
+        if status in {"working", "blocked"} and not observed:
+            set_setting(db, "active_delivery_observed", "1")
+            db.commit()
+        return True
+    if observed or current_seq > baseline:
+        clear_active_delivery(db)
+        db.commit()
+        return False
+    return True
+
+
 def targets_payload() -> dict[str, object]:
     targets, error = herdr_targets()
     all_targets = [
@@ -159,14 +220,7 @@ def targets_payload() -> dict[str, object]:
         if selected_label != stored_label:
             set_setting(db, "delivery_target_label", selected_label)
             changed = True
-        try:
-            stored_active_notes = json.loads(setting(db, "active_delivery_notes", "[]"))
-            active_note_ids = (
-                [str(note_id) for note_id in stored_active_notes]
-                if isinstance(stored_active_notes, list) else []
-            )
-        except json.JSONDecodeError:
-            active_note_ids = []
+        active_note_ids = read_active_note_ids(db)
         if setting(db, "active_delivery_tracking", "0") != "1":
             set_setting(db, "active_delivery_tracking", "1")
             changed = True
@@ -182,24 +236,12 @@ def targets_payload() -> dict[str, object]:
                     set_setting(db, "active_delivery_started", str(int(time.time())))
                     set_setting(db, "active_delivery_observed", "1")
         active_target_id = setting(db, "active_delivery_target", "")
-        active_started = int(setting(db, "active_delivery_started", "0") or "0")
-        active_observed = setting(db, "active_delivery_observed", "0") == "1"
         active_target = next(
             (target for target in all_targets if target["id"] == active_target_id), None
         )
-        if active_note_ids and active_target and active_target["status"] == "working":
-            if not active_observed:
-                set_setting(db, "active_delivery_observed", "1")
-                changed = True
-        elif active_note_ids and (
-            active_observed or not active_target or int(time.time()) - active_started >= 12
-        ):
-            active_note_ids = []
-            set_setting(db, "active_delivery_notes", "[]")
-            set_setting(db, "active_delivery_target", "")
-            set_setting(db, "active_delivery_started", "0")
-            set_setting(db, "active_delivery_observed", "0")
-            changed = True
+        if active_note_ids and active_target_id:
+            active_delivery_pending(db, active_target_id, active_target)
+            active_note_ids = read_active_note_ids(db)
         if changed:
             db.commit()
         feed_enabled = setting(db, "feed_enabled", "0") == "1"
@@ -402,6 +444,16 @@ def feed_control(args: argparse.Namespace) -> None:
             requested = args.action == "start"
         if requested and setting(db, "delivery_target", "clipboard") == "clipboard":
             raise ValueError("select a Herdr target before starting the feed")
+        if requested:
+            target_id = setting(db, "delivery_target", "clipboard")
+            targets, error = herdr_targets()
+            if error:
+                raise ValueError(error)
+            target = next((item for item in targets if item["id"] == target_id), None)
+            if not target:
+                raise ValueError("selected Herdr target is unavailable")
+            if not bool(target.get("lifecycleTracked")):
+                raise ValueError(str(target.get("waitError") or "target lifecycle is not tracked"))
         if requested and not enabled and args.action != "resume":
             bucket_id = str(getattr(args, "bucket_id", "") or active_bucket(db))
             requested_section = str(getattr(args, "section_id", ""))
@@ -547,7 +599,7 @@ def claim_feed_notes(note_ids: list[str]) -> str:
 
 def finish_feed_claim(
     note_ids: list[str], token: str, error: str = "", delivery_kind: str = "worker",
-    target_id: str = "",
+    target_id: str = "", target_state_seq: int = 0, target_status: str = "",
 ) -> None:
     with connect() as db:
         sequence = db.execute(
@@ -573,7 +625,8 @@ def finish_feed_claim(
             set_setting(db, "active_delivery_notes", json.dumps(note_ids))
             set_setting(db, "active_delivery_target", target_id)
             set_setting(db, "active_delivery_started", str(delivered_at))
-            set_setting(db, "active_delivery_observed", "0")
+            set_setting(db, "active_delivery_state_seq", str(max(0, target_state_seq)))
+            set_setting(db, "active_delivery_observed", "1" if target_status == "working" else "0")
         db.commit()
 
 
@@ -618,7 +671,8 @@ def deliver_note(
         if target["status"] not in {"idle", "done", "working"}:
             raise ValueError(f"Herdr agent is {target['status']}; prompt injection is unavailable")
     elif not target["available"]:
-        raise ValueError(f"Herdr agent is {target['status']}; wait until it is idle")
+        message = str(target.get("waitError") or f"Herdr agent is {target['status']}; wait until it is idle")
+        raise ValueError(message)
     with connect() as db:
         note = db.execute("SELECT text FROM notes WHERE id = ?", (note_id,)).fetchone()
         attachments = attachment_files(db, [note_id]) if note else []
@@ -632,7 +686,8 @@ def deliver_note(
         raise
     finish_feed_claim(
         [note_id], token, delivery_kind="feed_now" if force_working else "manual",
-        target_id=target_id,
+        target_id=target_id, target_state_seq=int(target.get("stateChangeSeq", 0) or 0),
+        target_status=str(target.get("status", "")),
     )
     return {"ok": True, "targetId": target_id, "label": target["label"]}
 
@@ -755,7 +810,12 @@ def feed_worker(_: argparse.Namespace) -> None:
                 continue
             targets, error = herdr_targets()
             target = next((item for item in targets if item["id"] == target_id), None)
-            if error or not target or not target["available"]:
+            if error or not target:
+                time.sleep(0.75)
+                continue
+            with connect() as db:
+                gate_pending = active_delivery_pending(db, target_id, target)
+            if gate_pending or not target["available"]:
                 time.sleep(0.75)
                 continue
             selected = batch_selection(notes) if mode.endswith("batch") else notes[:1]
@@ -778,5 +838,9 @@ def feed_worker(_: argparse.Namespace) -> None:
                 finish_feed_claim(note_ids, token, str(error))
                 time.sleep(1.5)
                 continue
-            finish_feed_claim(note_ids, token, target_id=target_id)
+            finish_feed_claim(
+                note_ids, token, target_id=target_id,
+                target_state_seq=int(target.get("stateChangeSeq", 0) or 0),
+                target_status=str(target.get("status", "")),
+            )
             time.sleep(1.0)

@@ -36,6 +36,7 @@ done
 bash -n "$plugin_dir/scripts/manage-binding.sh" "$plugin_dir/scripts/prepare-remove.sh"
 "$plugin_dir/tests/test-cli.sh"
 "$plugin_dir/tests/test-bindings.sh"
+"$plugin_dir/tests/test-feed-idle.sh"
 "$plugin_dir/tests/test-remote.sh"
 "$plugin_dir/tests/test-safety.sh"
 "$plugin_dir/tests/test-attachments.sh"

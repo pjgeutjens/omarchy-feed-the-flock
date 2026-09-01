@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.pjgeutjens.agentfeed",
   "name": "Feed the Flock",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "Pieter Geutjens",
   "license": "MIT",
   "description": "Capture and arrange voice notes before feeding them to an agent session.",
