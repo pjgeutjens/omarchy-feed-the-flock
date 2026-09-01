@@ -10,15 +10,13 @@ Rectangle {
   property color dimForeground: Qt.darker(foreground, 1.55)
   property string fontFamily: Style.font.family
   property string query: ""
-  property string recordBinding: ""
-  property string feedBinding: ""
 
   signal closeRequested()
 
   readonly property bool inputFocused: helpSearch.activeFocus
   readonly property var bindings: [
-    { category: "Global", keys: root.recordBinding || "Not assigned", action: "Hold to capture; release to finish" },
-    { category: "Global", keys: root.feedBinding || "Not assigned", action: "Toggle the delivery feed" },
+    { category: "Global", keys: "Shift+F9", action: "Hold to capture; release to finish" },
+    { category: "Global", keys: "Shift+F10", action: "Toggle the delivery feed" },
     { category: "Navigation", keys: "H/L or ←/→", action: "Previous or next bucket" },
     { category: "Navigation", keys: "Tab / Shift+Tab", action: "Next or previous section" },
     { category: "Navigation", keys: "N", action: "Toggle active-section notes overlay" },
@@ -27,7 +25,7 @@ Rectangle {
     { category: "Notes overlay", keys: "J/K or ↓/↑", action: "Select next or previous pending note" },
     { category: "Notes overlay", keys: "U/D", action: "Move selected note up or down" },
     { category: "Notes overlay", keys: "Home/End", action: "Select first or last pending note" },
-    { category: "Remote", keys: "R", action: "Connect, reconnect, or disconnect a remote feeder" },
+    { category: "Capture & delivery", keys: "R", action: "Start or finish recording" },
     { category: "Capture & delivery", keys: "T", action: "Open delivery target selector" },
     { category: "Capture & delivery", keys: "M", action: "Open delivery mode selector" },
     { category: "Capture & delivery", keys: "Q", action: "Open FIFO/LIFO queue-order selector" },

@@ -307,31 +307,10 @@ def promote_next_feed_section(db: sqlite3.Connection) -> bool:
     return True
 
 
-def state_command(args: argparse.Namespace) -> None:
-    db = connect()
-    if not getattr(args, "local_only", False):
-        from .remote import remote_mode, remote_state
-        enabled, endpoint = remote_mode(db)
-        if enabled:
-            from .bindings import binding_values
-            bucket_id = setting(db, "remote_bucket", "")
-            section_id = setting(db, "remote_section", "")
-            local_bindings = binding_values(db, persist_migration=False)
-            db.close()
-            value = remote_state(endpoint, bucket_id, section_id)
-            value.update(local_bindings)
-            print(json.dumps(value, ensure_ascii=False))
-            return
-    with db:
-        requested_bucket = str(getattr(args, "bucket_id", "") or "")
-        selected = requested_bucket if requested_bucket and db.execute(
-            "SELECT 1 FROM buckets WHERE id = ?", (requested_bucket,),
-        ).fetchone() else active_bucket(db)
-        requested_section = str(getattr(args, "section_id", "") or "")
-        selected_section = requested_section if requested_section and db.execute(
-            "SELECT 1 FROM sections WHERE id = ? AND bucket_id = ?",
-            (requested_section, selected),
-        ).fetchone() else active_section(db, selected)
+def state_command(_: argparse.Namespace) -> None:
+    with connect() as db:
+        selected = active_bucket(db)
+        selected_section = active_section(db, selected)
         feed_bucket_id, feed_section_id = feed_destination(db)
         queue_rows = feed_section_queue(db)
         queue_positions = {
@@ -440,16 +419,10 @@ def state_command(args: argparse.Namespace) -> None:
                     capture_section_name = capture_destination["section_name"]
             except (json.JSONDecodeError, AttributeError):
                 pass
-        from .bindings import binding_values
-        bindings = binding_values(db, persist_migration=False)
         print(
             json.dumps(
                 {
                     "phase": phase,
-                    "remoteMode": False,
-                    "remoteEndpoint": "",
-                    "readOnly": False,
-                    **bindings,
                     "error": setting(db, "error"),
                     "captureBucketName": capture_bucket_name,
                     "captureSectionName": capture_section_name,

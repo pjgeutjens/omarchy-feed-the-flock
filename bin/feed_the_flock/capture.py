@@ -39,8 +39,6 @@ def voxtype_class() -> str:
 
 def record_start(_: argparse.Namespace) -> None:
     with connect() as db:
-        if setting(db, "remote_mode", "0") == "1":
-            raise ValueError("recording is unavailable while browsing a remote feeder")
         if normalized_phase(db) in {"recording", "transcribing"}:
             raise SystemExit("feed-the-flock: a capture is already active")
         if voxtype_class() != "idle":

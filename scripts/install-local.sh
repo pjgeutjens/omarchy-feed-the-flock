@@ -19,7 +19,7 @@ install -m755 "$source_dir/scripts/prepare-remove.sh" "$plugin_dir/scripts/prepa
 install -m644 "$source_dir/bin/feed_the_flock/"*.py "$plugin_dir/bin/feed_the_flock/"
 install -m755 "$source_dir/bin/feed-the-flock" "$plugin_dir/bin/feed-the-flock"
 python3 "$source_dir/scripts/install-workspace.py" "$source_dir/workspace" "$plugin_dir/workspace"
-for file in manifest.json qmldir AgentFeedState.qml AgentFeedPresentation.js AgentFeedKeyCatcher.qml KeybindingsOverlay.qml NotesOverlay.qml BindingsOverlay.qml RemoteConnectOverlay.qml BarWidget.qml Panel.qml README.md; do
+for file in manifest.json qmldir AgentFeedState.qml AgentFeedPresentation.js AgentFeedKeyCatcher.qml KeybindingsOverlay.qml NotesOverlay.qml BarWidget.qml Panel.qml README.md; do
   install -m644 "$source_dir/$file" "$plugin_dir/$file"
 done
 "$plugin_dir/bin/feed-the-flock" init

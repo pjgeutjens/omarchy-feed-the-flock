@@ -656,9 +656,6 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
         try:
             self.validate_local_request()
             if parsed.path == "/api/events":
-                from .remote import remote_mode
-                with connect() as mode_db:
-                    is_remote, _ = remote_mode(mode_db)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Cache-Control", "no-cache")
@@ -676,11 +673,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                             elapsed += 0.5
                             total_elapsed += 0.5
                             current = db.execute("PRAGMA data_version").fetchone()[0]
-                            if is_remote and elapsed >= 10:
-                                self.wfile.write(b"event: change\ndata: remote-refresh\n\n")
-                                self.wfile.flush()
-                                elapsed = 0.0
-                            elif current != version:
+                            if current != version:
                                 version = current
                                 self.wfile.write(b"event: change\ndata: updated\n\n")
                                 self.wfile.flush()
@@ -742,12 +735,6 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 self.json_response(200, omarchy_theme())
                 return
             if parsed.path == "/api/buckets":
-                from .remote import remote_mode, remote_workspace_payload
-                with connect() as mode_db:
-                    is_remote, _ = remote_mode(mode_db)
-                if is_remote:
-                    self.json_response(200, remote_workspace_payload("buckets"))
-                    return
                 with connect() as db:
                     buckets = [
                         {
@@ -767,29 +754,12 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 self.json_response(200, {"buckets": buckets})
                 return
             if parsed.path == "/api/targets":
-                from .remote import remote_mode
-                with connect() as mode_db:
-                    is_remote, endpoint = remote_mode(mode_db)
-                if is_remote:
-                    self.json_response(200, {
-                        "targets": [], "selectedTargetId": "remote-read-only",
-                        "selectedTargetLabel": f"REMOTE {endpoint} · READ ONLY",
-                        "activeNoteIds": [], "feedEnabled": False, "feedQueue": [],
-                        "deliveryMode": "read-only", "queueOrder": "fifo", "readOnly": True,
-                    })
-                else:
-                    self.json_response(200, targets_payload())
+                self.json_response(200, targets_payload())
                 return
             if parsed.path == "/api/bucket":
                 bucket_id = urllib.parse.parse_qs(parsed.query).get("id", ["inbox"])[0]
-                from .remote import remote_mode, remote_workspace_payload
-                with connect() as mode_db:
-                    is_remote, _ = remote_mode(mode_db)
-                if is_remote:
-                    self.json_response(200, remote_workspace_payload("bucket", bucket_id))
-                else:
-                    with connect() as db:
-                        self.json_response(200, bucket_document(db, bucket_id))
+                with connect() as db:
+                    self.json_response(200, bucket_document(db, bucket_id))
                 return
             if parsed.path in {"/", "/index.html"}:
                 body = read_regular_file(
@@ -815,9 +785,6 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 self.json_response(200, {"ok": True})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
-            from .remote import remote_mode_readonly
-            if remote_mode_readonly():
-                raise ValueError("remote workspace is read-only")
             if parsed.path == "/api/attachment/create":
                 note_id = str(value.get("noteId", ""))
                 mime_type = str(value.get("mimeType", ""))
@@ -1044,14 +1011,9 @@ class BoundedWorkspaceServer(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 16
 
-    def __init__(
-        self,
-        server_address: tuple[str, int],
-        request_handler: type[BaseHTTPRequestHandler],
-        bind_and_activate: bool = True,
-    ) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
         self._request_slots = threading.BoundedSemaphore(16)
-        super().__init__(server_address, request_handler, bind_and_activate)
+        super().__init__(*args, **kwargs)
 
     def process_request(self, request: socket.socket, client_address: object) -> None:
         if not self._request_slots.acquire(blocking=False):
@@ -1091,14 +1053,10 @@ def workspace_stop(_: argparse.Namespace) -> None:
 
 
 def workspace_bucket(args: argparse.Namespace) -> None:
-    from .remote import remote_mode
     with connect() as db:
-        is_remote, _ = remote_mode(db)
-        bucket_id = args.bucket_id or (setting(db, "remote_bucket", "") if is_remote else active_bucket(db))
-        if not is_remote and not db.execute("SELECT 1 FROM buckets WHERE id = ?", (bucket_id,)).fetchone():
+        bucket_id = args.bucket_id or active_bucket(db)
+        if not db.execute("SELECT 1 FROM buckets WHERE id = ?", (bucket_id,)).fetchone():
             raise SystemExit("feed-the-flock: bucket does not exist")
-        if is_remote and not bucket_id:
-            raise SystemExit("feed-the-flock: remote bucket is unavailable")
     try:
         with socket.create_connection((WORKSPACE_HOST, WORKSPACE_PORT), timeout=0.2):
             pass

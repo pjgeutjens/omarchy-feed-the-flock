@@ -22,17 +22,7 @@ let draggingId = null;
 let draggingSectionId = null;
 let editing = false;
 let showSubmitted = localStorage.getItem('agent-feed-show-submitted') !== 'false';
-let readOnly = false;
 let toastTimer = null;
-
-function applyReadOnly(value, endpoint = '') {
-  readOnly = Boolean(value);
-  document.body.classList.toggle('remote-read-only', readOnly);
-  if (readOnly) {
-    targetNameEl.textContent = `REMOTE ${endpoint} · READ ONLY`;
-    setStatus('Remote · read only');
-  }
-}
 
 const controlsObserver = new IntersectionObserver(entries => {
   workspaceControlsEl.classList.toggle('stuck', !entries[0].isIntersecting);
@@ -41,7 +31,6 @@ controlsObserver.observe(controlsSentinelEl);
 
 async function loadBuckets(preferred = bucketId) {
   const data = await request('/api/buckets');
-  applyReadOnly(data.readOnly, data.remoteEndpoint);
   const buckets = data.buckets || [];
   if (!buckets.some(bucket => bucket.id === preferred)) preferred = buckets[0]?.id || 'inbox';
   bucketId = preferred;
@@ -423,7 +412,7 @@ function noteElement(note, sectionId) {
     copyText(text.innerText);
   });
   row.addEventListener('contextmenu', event => {
-    if (readOnly || event.target.closest('.handle')) return;
+    if (event.target.closest('.handle')) return;
     event.preventDefault();
     beginEditing(text);
   });
@@ -993,7 +982,6 @@ async function load() {
     const data = await request(`/api/bucket?id=${encodeURIComponent(bucketId)}`);
     const draft = editingSnapshot();
     currentDocument = data;
-    applyReadOnly(data.readOnly, data.remoteEndpoint);
     activeNoteIds = data.activeNoteIds || activeNoteIds;
     feedToggleEl.textContent = data.feedEnabled ? '■ Stop' : '▶ Start';
     feedToggleEl.classList.toggle('active', Boolean(data.feedEnabled));
@@ -1008,7 +996,7 @@ async function load() {
     );
     if (activeChip) activeChip.textContent = data.name;
     renderFeedQueue(data);
-    documentEl.replaceChildren(...(readOnly ? [] : [addSectionControl()]), ...data.sections.map(sectionElement));
+    documentEl.replaceChildren(addSectionControl(), ...data.sections.map(sectionElement));
     updateActiveNotes();
     restoreEditing(draft);
     setStatus('Live');
@@ -1022,7 +1010,6 @@ document.addEventListener('keydown', event => {
       || editing || isModalOpen()) return;
   const active = document.activeElement;
   if (active?.matches('input, textarea, select, [contenteditable="true"]')) return;
-  if (readOnly) return;
   if (event.key === 'i' || event.key === 'I') {
     event.preventDefault();
     importBucket();

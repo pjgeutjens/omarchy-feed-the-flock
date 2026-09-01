@@ -11,8 +11,6 @@ qmllint -I "$OMARCHY_PATH/shell" \
   "$plugin_dir/AgentFeedKeyCatcher.qml" \
   "$plugin_dir/KeybindingsOverlay.qml" \
   "$plugin_dir/NotesOverlay.qml" \
-  "$plugin_dir/BindingsOverlay.qml" \
-  "$plugin_dir/RemoteConnectOverlay.qml" \
   "$plugin_dir/BarWidget.qml" \
   "$plugin_dir/Panel.qml"
 python3 -m py_compile \
@@ -35,8 +33,6 @@ done
 }
 bash -n "$plugin_dir/scripts/manage-binding.sh" "$plugin_dir/scripts/prepare-remove.sh"
 "$plugin_dir/tests/test-cli.sh"
-"$plugin_dir/tests/test-bindings.sh"
-"$plugin_dir/tests/test-remote.sh"
 "$plugin_dir/tests/test-safety.sh"
 "$plugin_dir/tests/test-attachments.sh"
 "$plugin_dir/tests/test-workspace.sh"

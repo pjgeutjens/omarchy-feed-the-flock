@@ -40,16 +40,37 @@ def safe_label(value: object, maximum: int) -> str:
     return " ".join(text.split())[:maximum]
 
 
-def parse_herdr_targets(output: bytes) -> list[dict[str, object]]:
-    response = json.loads(output.decode(errors="replace")).get("result", {})
-    snapshot = response.get("snapshot", response)
-    agents = snapshot.get("agents", [])
-    raw_tabs = snapshot.get("tabs", [])
-    tabs = {
-        str(tab.get("tab_id", "")): safe_label(tab.get("label", ""), 120)
-        for tab in (raw_tabs[:256] if isinstance(raw_tabs, list) else [])
-        if isinstance(tab, dict)
-    }
+def herdr_targets() -> tuple[list[dict[str, object]], str]:
+    try:
+        result = run_bounded(
+            [HERDR, "api", "snapshot"], timeout=5,
+            stdout_limit=512 * 1024, stderr_limit=64 * 1024,
+        )
+    except FileNotFoundError:
+        return [], "Herdr is not installed"
+    except subprocess.TimeoutExpired:
+        return [], "Herdr did not respond"
+    except ValueError:
+        return [], "Herdr response exceeded the safety limit"
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout).decode(errors="replace").strip() or "Herdr is unavailable"
+        try:
+            message = str(json.loads(message).get("error", {}).get("message", message))
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        return [], message[:240]
+    try:
+        response = json.loads(result.stdout.decode(errors="replace")).get("result", {})
+        snapshot = response.get("snapshot", response)
+        agents = snapshot.get("agents", [])
+        raw_tabs = snapshot.get("tabs", [])
+        tabs = {
+            str(tab.get("tab_id", "")): safe_label(tab.get("label", ""), 120)
+            for tab in (raw_tabs[:256] if isinstance(raw_tabs, list) else [])
+            if isinstance(tab, dict)
+        }
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return [], "Herdr returned invalid session data"
     targets: list[dict[str, object]] = []
     for agent in (agents[:128] if isinstance(agents, list) else []):
         if not isinstance(agent, dict):
@@ -75,73 +96,7 @@ def parse_herdr_targets(output: bytes) -> list[dict[str, object]]:
             "available": status in {"idle", "done"},
             "paneId": pane_id,
         })
-    return targets
-
-
-def running_remote_hosts() -> list[str]:
-    hosts: list[str] = []
-    try:
-        process_entries = Path("/proc").iterdir()
-    except OSError:
-        return hosts
-    for entry_index, process_dir in enumerate(process_entries):
-        if entry_index >= 4096:
-            break
-        if not process_dir.name.isdigit():
-            continue
-        try:
-            command = read_regular_file(
-                process_dir / "cmdline", root=process_dir, max_bytes=8192,
-            )
-        except (OSError, ValueError):
-            continue
-        arguments = [part.decode(errors="replace") for part in command.split(b"\0") if part]
-        if not arguments or Path(arguments[0]).name != "herdr":
-            continue
-        try:
-            remote_index = arguments.index("--remote")
-            host = arguments[remote_index + 1]
-        except (ValueError, IndexError):
-            continue
-        if not re.fullmatch(r"(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}@)?[A-Za-z0-9][A-Za-z0-9._-]{0,252}", host):
-            continue
-        if host not in hosts:
-            hosts.append(host)
-        if len(hosts) >= 4:
-            break
-    return hosts
-
-
-
-def herdr_targets() -> tuple[list[dict[str, object]], str]:
-    try:
-        result = run_bounded(
-            [HERDR, "api", "snapshot"], timeout=5,
-            stdout_limit=512 * 1024, stderr_limit=64 * 1024,
-        )
-    except FileNotFoundError:
-        return [], "Herdr is not installed"
-    except subprocess.TimeoutExpired:
-        return [], "Herdr did not respond"
-    except ValueError:
-        return [], "Herdr response exceeded the safety limit"
-    if result.returncode != 0:
-        message = (result.stderr or result.stdout).decode(errors="replace").strip() or "Herdr is unavailable"
-        try:
-            message = str(json.loads(message).get("error", {}).get("message", message))
-        except (json.JSONDecodeError, AttributeError):
-            pass
-        local_targets: list[dict[str, object]] = []
-        error = message[:240]
-    else:
-        try:
-            local_targets = parse_herdr_targets(result.stdout)
-            error = ""
-        except (json.JSONDecodeError, AttributeError, TypeError):
-            local_targets = []
-            error = "Herdr returned invalid session data"
-
-    return local_targets, error
+    return targets, ""
 
 
 def targets_payload() -> dict[str, object]:
@@ -207,7 +162,6 @@ def targets_payload() -> dict[str, object]:
         queue_order = setting(db, "queue_order", "fifo")
     return {
         "targets": all_targets,
-        "suggestedRemoteEndpoint": (running_remote_hosts() or [""])[0],
         "selectedTargetId": selected_id,
         "selectedTargetLabel": selected_label,
         "activeNoteIds": active_note_ids,
@@ -229,8 +183,6 @@ def select_target(args: argparse.Namespace) -> None:
     )
     if not target:
         raise ValueError("delivery target is no longer available")
-    if target.get("readOnly"):
-        raise ValueError("remote Herdr sessions are currently read-only")
     with connect() as db:
         set_setting(db, "delivery_target", str(target["id"]))
         set_setting(db, "delivery_target_label", str(target["label"]))
@@ -392,8 +344,6 @@ def select_queue_order(args: argparse.Namespace) -> None:
 def feed_control(args: argparse.Namespace) -> None:
     with connect() as db:
         enabled = setting(db, "feed_enabled", "0") == "1"
-        if setting(db, "remote_mode", "0") == "1" and args.action != "stop":
-            raise ValueError("feeding is unavailable while browsing a remote feeder")
         if args.action == "toggle":
             requested = not enabled
         elif args.action == "resume":
