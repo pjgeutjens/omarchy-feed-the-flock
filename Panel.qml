@@ -804,14 +804,19 @@ Panel {
               displayText: AgentFeedCore.AgentFeedState.selectedDeliveryTargetLabel
               onActivated: function(index) {
                 var target = AgentFeedCore.AgentFeedState.deliveryTargets[index]
-                if (target) AgentFeedCore.AgentFeedState.selectDeliveryTarget(target.id)
+                if (target && !target.readOnly)
+                  AgentFeedCore.AgentFeedState.selectDeliveryTarget(target.id)
                 keyCatcher.forceActiveFocus()
               }
               delegate: ItemDelegate {
                 required property var modelData
                 width: targetPicker.width
+                enabled: !modelData.readOnly
                 text: modelData.kind === "herdr"
-                  ? modelData.label + "  ·  " + modelData.status : modelData.label
+                  ? modelData.label + "  ·  " + modelData.status
+                  : modelData.kind === "remote-herdr"
+                    ? modelData.label + "  ·  " + modelData.status + "  ·  READ ONLY"
+                    : modelData.label
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
                 highlighted: targetPicker.highlightedIndex === index

@@ -1011,9 +1011,14 @@ class BoundedWorkspaceServer(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 16
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        request_handler: type[BaseHTTPRequestHandler],
+        bind_and_activate: bool = True,
+    ) -> None:
         self._request_slots = threading.BoundedSemaphore(16)
-        super().__init__(*args, **kwargs)
+        super().__init__(server_address, request_handler, bind_and_activate)
 
     def process_request(self, request: socket.socket, client_address: object) -> None:
         if not self._request_slots.acquire(blocking=False):

@@ -40,6 +40,166 @@ def safe_label(value: object, maximum: int) -> str:
     return " ".join(text.split())[:maximum]
 
 
+def parse_herdr_targets(output: bytes, *, remote_host: str = "") -> list[dict[str, object]]:
+    response = json.loads(output.decode(errors="replace")).get("result", {})
+    snapshot = response.get("snapshot", response)
+    agents = snapshot.get("agents", [])
+    raw_tabs = snapshot.get("tabs", [])
+    tabs = {
+        str(tab.get("tab_id", "")): safe_label(tab.get("label", ""), 120)
+        for tab in (raw_tabs[:256] if isinstance(raw_tabs, list) else [])
+        if isinstance(tab, dict)
+    }
+    targets: list[dict[str, object]] = []
+    for agent in (agents[:128] if isinstance(agents, list) else []):
+        if not isinstance(agent, dict):
+            continue
+        pane_id = str(agent.get("pane_id", ""))
+        if not re.fullmatch(r"[A-Za-z0-9]+:p[A-Za-z0-9]+", pane_id):
+            continue
+        status = safe_label(agent.get("agent_status", "unknown"), 40)
+        name = safe_label(agent.get("agent", "agent"), 80)
+        tab_label = tabs.get(str(agent.get("tab_id", "")), "")
+        context = safe_label(
+            tab_label
+            or agent.get("terminal_title_stripped")
+            or Path(str(agent.get("foreground_cwd") or agent.get("cwd") or pane_id)).name
+            or pane_id,
+            120,
+        )
+        if remote_host:
+            targets.append({
+                "id": f"remote:{remote_host}:{pane_id}",
+                "kind": "remote-herdr",
+                "label": f"REMOTE {remote_host} · {name} · {context}",
+                "status": status,
+                "available": False,
+                "readOnly": True,
+                "paneId": pane_id,
+                "remoteHost": remote_host,
+            })
+        else:
+            targets.append({
+                "id": f"herdr:{pane_id}",
+                "kind": "herdr",
+                "label": f"{name} · {context}",
+                "status": status,
+                "available": status in {"idle", "done"},
+                "paneId": pane_id,
+            })
+    return targets
+
+
+def running_remote_hosts() -> list[str]:
+    hosts: list[str] = []
+    try:
+        process_entries = Path("/proc").iterdir()
+    except OSError:
+        return hosts
+    for entry_index, process_dir in enumerate(process_entries):
+        if entry_index >= 4096:
+            break
+        if not process_dir.name.isdigit():
+            continue
+        try:
+            command = read_regular_file(
+                process_dir / "cmdline", root=process_dir, max_bytes=8192,
+            )
+        except (OSError, ValueError):
+            continue
+        arguments = [part.decode(errors="replace") for part in command.split(b"\0") if part]
+        if not arguments or Path(arguments[0]).name != "herdr":
+            continue
+        try:
+            remote_index = arguments.index("--remote")
+            host = arguments[remote_index + 1]
+        except (ValueError, IndexError):
+            continue
+        if not re.fullmatch(r"(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}@)?[A-Za-z0-9][A-Za-z0-9._-]{0,252}", host):
+            continue
+        if host not in hosts:
+            hosts.append(host)
+        if len(hosts) >= 4:
+            break
+    return hosts
+
+
+def validated_cached_remote_targets(value: object, hosts: list[str]) -> list[dict[str, object]]:
+    if not isinstance(value, list) or len(value) > 256:
+        return []
+    targets: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        host = str(item.get("remoteHost", ""))
+        pane_id = str(item.get("paneId", ""))
+        if host not in hosts or (pane_id and not re.fullmatch(r"[A-Za-z0-9]+:p[A-Za-z0-9]+", pane_id)):
+            continue
+        targets.append({
+            "id": f"remote:{host}:{pane_id}" if pane_id else f"remote:{host}",
+            "kind": "remote-herdr",
+            "label": safe_label(item.get("label", f"REMOTE {host}"), 360),
+            "status": safe_label(item.get("status", "unknown"), 40),
+            "available": False,
+            "readOnly": True,
+            "remoteHost": host,
+            **({"paneId": pane_id} if pane_id else {}),
+        })
+    return targets
+
+
+def remote_herdr_targets() -> list[dict[str, object]]:
+    hosts = running_remote_hosts()
+    if not hosts:
+        return []
+    with connect() as db:
+        try:
+            cache = json.loads(setting(db, "remote_targets_cache", "{}"))
+            cached_at = float(cache.get("createdAt", 0))
+            cached_hosts = cache.get("hosts", [])
+            cached_targets = cache.get("targets", [])
+            if (
+                cached_hosts == hosts and 0 <= time.time() - cached_at < 10
+                and isinstance(cached_targets, list) and len(cached_targets) <= 256
+            ):
+                validated_targets = validated_cached_remote_targets(cached_targets, hosts)
+                if len(validated_targets) == len(cached_targets):
+                    return validated_targets
+        except (ValueError, TypeError, json.JSONDecodeError, AttributeError):
+            pass
+
+    targets: list[dict[str, object]] = []
+    for host in hosts:
+        try:
+            remote_result = run_bounded(
+                [
+                    "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=2",
+                    "-o", "ConnectionAttempts=1", "--", host, "herdr", "api", "snapshot",
+                ],
+                timeout=4, stdout_limit=512 * 1024, stderr_limit=64 * 1024,
+            )
+            if remote_result.returncode != 0:
+                raise ValueError("remote Herdr unavailable")
+            targets.extend(parse_herdr_targets(remote_result.stdout, remote_host=host))
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError, json.JSONDecodeError, AttributeError, TypeError):
+            targets.append({
+                "id": f"remote:{host}",
+                "kind": "remote-herdr",
+                "label": f"REMOTE {host} · unavailable",
+                "status": "unavailable",
+                "available": False,
+                "readOnly": True,
+                "remoteHost": host,
+            })
+    targets = targets[:256]
+    with connect() as db:
+        set_setting(db, "remote_targets_cache", json.dumps({
+            "createdAt": time.time(), "hosts": hosts, "targets": targets,
+        }, separators=(",", ":")))
+        db.commit()
+    return targets
+
+
 def herdr_targets() -> tuple[list[dict[str, object]], str]:
     try:
         result = run_bounded(
@@ -58,45 +218,17 @@ def herdr_targets() -> tuple[list[dict[str, object]], str]:
             message = str(json.loads(message).get("error", {}).get("message", message))
         except (json.JSONDecodeError, AttributeError):
             pass
-        return [], message[:240]
-    try:
-        response = json.loads(result.stdout.decode(errors="replace")).get("result", {})
-        snapshot = response.get("snapshot", response)
-        agents = snapshot.get("agents", [])
-        raw_tabs = snapshot.get("tabs", [])
-        tabs = {
-            str(tab.get("tab_id", "")): safe_label(tab.get("label", ""), 120)
-            for tab in (raw_tabs[:256] if isinstance(raw_tabs, list) else [])
-            if isinstance(tab, dict)
-        }
-    except (json.JSONDecodeError, AttributeError, TypeError):
-        return [], "Herdr returned invalid session data"
-    targets: list[dict[str, object]] = []
-    for agent in (agents[:128] if isinstance(agents, list) else []):
-        if not isinstance(agent, dict):
-            continue
-        pane_id = str(agent.get("pane_id", ""))
-        if not re.fullmatch(r"[A-Za-z0-9]+:p[A-Za-z0-9]+", pane_id):
-            continue
-        status = safe_label(agent.get("agent_status", "unknown"), 40)
-        name = safe_label(agent.get("agent", "agent"), 80)
-        tab_label = tabs.get(str(agent.get("tab_id", "")), "")
-        context = safe_label(
-            tab_label
-            or agent.get("terminal_title_stripped")
-            or Path(str(agent.get("foreground_cwd") or agent.get("cwd") or pane_id)).name
-            or pane_id,
-            120,
-        )
-        targets.append({
-            "id": f"herdr:{pane_id}",
-            "kind": "herdr",
-            "label": f"{name} · {context}",
-            "status": status,
-            "available": status in {"idle", "done"},
-            "paneId": pane_id,
-        })
-    return targets, ""
+        local_targets: list[dict[str, object]] = []
+        error = message[:240]
+    else:
+        try:
+            local_targets = parse_herdr_targets(result.stdout)
+            error = ""
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            local_targets = []
+            error = "Herdr returned invalid session data"
+
+    return [*local_targets, *remote_herdr_targets()], error
 
 
 def targets_payload() -> dict[str, object]:
@@ -183,6 +315,8 @@ def select_target(args: argparse.Namespace) -> None:
     )
     if not target:
         raise ValueError("delivery target is no longer available")
+    if target.get("readOnly"):
+        raise ValueError("remote Herdr sessions are currently read-only")
     with connect() as db:
         set_setting(db, "delivery_target", str(target["id"]))
         set_setting(db, "delivery_target_label", str(target["label"]))
