@@ -380,16 +380,56 @@ Panel {
             fontFamily: root.contentFontFamily
           }
 
-          Text {
-            visible: AgentFeedCore.AgentFeedState.lastError !== "" || AgentFeedCore.AgentFeedState.error !== ""
+          BorderSurface {
+            id: warningSurface
+            visible: AgentFeedCore.AgentFeedState.warningMessage !== ""
             width: parent.width
-            text: AgentFeedCore.AgentFeedState.lastError !== ""
-              ? AgentFeedCore.AgentFeedState.lastError : AgentFeedCore.AgentFeedState.error
-            textFormat: Text.PlainText
-            color: root.urgentForeground
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.bodySmall
-            wrapMode: Text.WordWrap
+            implicitHeight: warningCopy.implicitHeight + Style.space(16)
+            color: Util.alpha(root.urgentForeground, 0.08)
+            borderSpec: Border.flat(root.urgentForeground, Style.normalBorderWidth)
+            radius: Style.cornerRadius
+
+            Column {
+              id: warningCopy
+              anchors.left: parent.left
+              anchors.right: warningDismiss.visible ? warningDismiss.left : parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.leftMargin: Style.space(8)
+              anchors.rightMargin: Style.space(8)
+              spacing: Style.space(2)
+
+              Text {
+                width: parent.width
+                text: "ACTION NEEDED"
+                textFormat: Text.PlainText
+                color: root.urgentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+              Text {
+                width: parent.width
+                text: AgentFeedCore.AgentFeedState.warningMessage
+                textFormat: Text.PlainText
+                color: root.contentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+            }
+
+            PanelActionButton {
+              id: warningDismiss
+              visible: AgentFeedCore.AgentFeedState.lastError !== ""
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(6)
+              anchors.verticalCenter: parent.verticalCenter
+              iconText: "×"
+              tooltipText: "Dismiss warning"
+              foreground: root.urgentForeground
+              fontFamily: root.contentFontFamily
+              onClicked: AgentFeedCore.AgentFeedState.dismissLastError()
+            }
           }
 
           BorderSurface {
