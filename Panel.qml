@@ -4,7 +4,6 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "." as AgentFeedCore
-import "AgentFeedPresentation.js" as Presentation
 
 Panel {
   id: root
@@ -17,11 +16,6 @@ Panel {
   property bool helpOpen: false
   property bool notesOpen: false
   property bool bindingsOpen: false
-  property bool creatingBucket: false
-  property bool creatingSection: false
-  property string editingBucketId: ""
-  property string editingSectionId: ""
-  property string deletingSectionId: ""
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
   readonly property color dimForeground: Qt.darker(contentForeground, 1.5)
@@ -72,90 +66,16 @@ Panel {
     AgentFeedCore.AgentFeedState.selectSection(values[index].id)
   }
 
-  function feedQueuePosition(sectionId) {
-    var queue = AgentFeedCore.AgentFeedState.feedQueue
-    for (var i = 0; i < queue.length; i++)
-      if (queue[i].sectionId === sectionId) return i
-    return -1
-  }
-
-  function beginDeleteSection() {
-    if (!root.selectedSectionIsFallback())
-      root.deletingSectionId = AgentFeedCore.AgentFeedState.activeSectionId
-  }
-
-  function confirmDeleteSection(notesMode) {
-    var sectionId = root.deletingSectionId
-    root.deletingSectionId = ""
-    if (sectionId !== "") AgentFeedCore.AgentFeedState.deleteSection(sectionId, notesMode)
-  }
-
-  function selectedSectionIsFallback() {
-    var sections = AgentFeedCore.AgentFeedState.sections
-    for (var i = 0; i < sections.length; i++)
-      if (sections[i].id === AgentFeedCore.AgentFeedState.activeSectionId)
-        return sections[i].systemKind === "unsorted"
-    return false
-  }
-
-  function moveActiveSectionOrder(direction) {
-    if (AgentFeedCore.AgentFeedState.activeSectionId === "" || AgentFeedCore.AgentFeedState.busy) return
-    AgentFeedCore.AgentFeedState.moveSection(AgentFeedCore.AgentFeedState.activeSectionId, direction)
-  }
-
   function openDeliveryTargetPicker() {
-    if (AgentFeedCore.AgentFeedState.deliveryTargets.length === 0) return
-    targetPicker.open()
+    routingControls.openTargetPicker()
   }
 
   function openDeliveryModePicker() {
-    modePicker.open()
+    routingControls.openModePicker()
   }
 
   function openQueueOrderPicker() {
-    orderPicker.open()
-  }
-
-  function submitBucket() {
-    var name = newBucketField.text.trim()
-    if (name === "") return
-    var accepted = root.editingBucketId !== ""
-      ? AgentFeedCore.AgentFeedState.renameBucket(root.editingBucketId, name)
-      : AgentFeedCore.AgentFeedState.createBucket(name)
-    if (accepted) {
-      root.creatingBucket = false
-      root.editingBucketId = ""
-      newBucketField.text = ""
-    }
-    keyCatcher.forceActiveFocus()
-  }
-
-  function submitSection() {
-    var name = newSectionField.text.trim()
-    if (name === "") return
-    var accepted = root.editingSectionId !== ""
-      ? AgentFeedCore.AgentFeedState.renameSection(root.editingSectionId, name)
-      : AgentFeedCore.AgentFeedState.createSection(name)
-    if (accepted) {
-      root.creatingSection = false
-      root.editingSectionId = ""
-      newSectionField.text = ""
-    }
-    keyCatcher.forceActiveFocus()
-  }
-
-  function beginRenameBucket() {
-    root.editingBucketId = AgentFeedCore.AgentFeedState.activeBucketId
-    root.creatingBucket = true
-    newBucketField.text = root.selectedBucketName()
-    Qt.callLater(function() { newBucketField.forceActiveFocus(); newBucketField.selectAll() })
-  }
-
-  function beginRenameSection() {
-    root.editingSectionId = AgentFeedCore.AgentFeedState.activeSectionId
-    root.creatingSection = true
-    newSectionField.text = root.selectedSectionName()
-    Qt.callLater(function() { newSectionField.forceActiveFocus(); newSectionField.selectAll() })
+    routingControls.openOrderPicker()
   }
 
   function toggleRecording() {
@@ -256,8 +176,8 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: root.notesOpen || root.bindingsOpen || keybindingsOverlay.inputFocused
-        || targetPicker.popupOpen || modePicker.popupOpen || orderPicker.popupOpen
-        || newBucketField.activeFocus || newSectionField.activeFocus
+        || routingControls.popupOpen
+        || bucketControls.inputFocused || sectionControls.inputFocused
       onMoveRequested: function(dx, dy) {
         if (!root.helpOpen && dx !== 0) root.cycleBucket(dx)
       }
@@ -266,7 +186,7 @@ Panel {
         else root.close()
       }
       onDeleteSectionRequested: {
-        if (!root.helpOpen) root.beginDeleteSection()
+        if (!root.helpOpen) sectionControls.beginDelete()
       }
       onDeleteBucketRequested: {
         if (!root.helpOpen)
@@ -286,20 +206,12 @@ Panel {
         else if (text === "i" || text === "I") AgentFeedCore.AgentFeedState.importBucket()
         else if (text === "x") AgentFeedCore.AgentFeedState.exportBucket(
           AgentFeedCore.AgentFeedState.activeBucketId)
-        else if (text === "b") {
-          root.editingBucketId = ""
-          root.creatingBucket = true
-          newBucketField.text = ""
-          Qt.callLater(function() { newBucketField.forceActiveFocus() })
-        } else if (text === "B") root.beginRenameBucket()
-        else if (text === "s") {
-          root.editingSectionId = ""
-          root.creatingSection = true
-          newSectionField.text = ""
-          Qt.callLater(function() { newSectionField.forceActiveFocus() })
-        } else if (text === "S") root.beginRenameSection()
-        else if (text === "[") root.moveActiveSectionOrder("left")
-        else if (text === "]") root.moveActiveSectionOrder("right")
+        else if (text === "b") bucketControls.beginCreate()
+        else if (text === "B") bucketControls.beginRename()
+        else if (text === "s") sectionControls.beginCreate()
+        else if (text === "S") sectionControls.beginRename()
+        else if (text === "[") sectionControls.moveActiveSectionOrder("left")
+        else if (text === "]") sectionControls.moveActiveSectionOrder("right")
         else if (text === "{") AgentFeedCore.AgentFeedState.moveBucket(
           AgentFeedCore.AgentFeedState.activeBucketId, "left")
         else if (text === "}") AgentFeedCore.AgentFeedState.moveBucket(
@@ -352,358 +264,23 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
-          Row {
+          PanelBucketControls {
+            id: bucketControls
             width: parent.width
-            PanelSectionHeader {
-              width: parent.width - bucketOrderActions.width
-              text: "BUCKET"
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-            }
-            Row {
-              id: bucketOrderActions
-              spacing: Style.space(2)
-              PanelActionButton {
-                iconText: "‹"
-                tooltipText: "Move active bucket left"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: AgentFeedCore.AgentFeedState.moveBucket(
-                  AgentFeedCore.AgentFeedState.activeBucketId, "left")
-              }
-              PanelActionButton {
-                iconText: "›"
-                tooltipText: "Move active bucket right"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: AgentFeedCore.AgentFeedState.moveBucket(
-                  AgentFeedCore.AgentFeedState.activeBucketId, "right")
-              }
-              PanelActionButton {
-                iconText: "⇧"
-                tooltipText: "Import Markdown bucket (I)"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: AgentFeedCore.AgentFeedState.importBucket()
-              }
-              PanelActionButton {
-                iconText: "⇩"
-                tooltipText: "Export active bucket to Downloads (X)"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: AgentFeedCore.AgentFeedState.exportBucket(
-                  AgentFeedCore.AgentFeedState.activeBucketId)
-              }
-              PanelActionButton {
-                iconText: "✎"
-                tooltipText: "Rename active bucket"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: root.beginRenameBucket()
-              }
-              PanelActionButton {
-                iconText: "×"
-                tooltipText: "Delete active bucket"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: AgentFeedCore.AgentFeedState.deleteBucket(
-                  AgentFeedCore.AgentFeedState.activeBucketId)
-              }
-            }
+            foreground: root.contentForeground
+            dimForeground: root.dimForeground
+            fontFamily: root.contentFontFamily
+            focusTarget: keyCatcher
           }
 
-          Flow {
+          PanelSectionControls {
+            id: sectionControls
             width: parent.width
-            spacing: Style.space(6)
-            Repeater {
-              model: AgentFeedCore.AgentFeedState.buckets
-              delegate: Button {
-                required property var modelData
-                text: modelData.name.toUpperCase() + "  " + modelData.messageCount + " MSG"
-                bordered: true
-                foreground: modelData.id === AgentFeedCore.AgentFeedState.activeBucketId
-                  ? Color.accent : root.contentForeground
-                fontFamily: root.contentFontFamily
-                fontSize: Style.font.caption
-                horizontalPadding: Style.space(8)
-                verticalPadding: Style.space(4)
-                onClicked: AgentFeedCore.AgentFeedState.selectBucket(modelData.id)
-              }
-            }
-            Button {
-              text: "+"
-              tooltipText: "Create bucket"
-              bordered: true
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-              fontSize: Style.font.caption
-              horizontalPadding: Style.space(8)
-              verticalPadding: Style.space(4)
-              onClicked: {
-                root.editingBucketId = ""
-                root.creatingBucket = true
-                newBucketField.text = ""
-                Qt.callLater(function() { newBucketField.forceActiveFocus() })
-              }
-            }
-          }
-
-          Row {
-            visible: root.creatingBucket
-            width: parent.width
-            spacing: Style.space(6)
-            TextField {
-              id: newBucketField
-              width: parent.width - createBucketButton.width - parent.spacing
-              placeholderText: "New bucket name"
-              foreground: root.contentForeground
-              font.family: root.contentFontFamily
-              onAccepted: root.submitBucket()
-              Keys.onEscapePressed: {
-                root.creatingBucket = false
-                root.editingBucketId = ""
-                text = ""
-                keyCatcher.forceActiveFocus()
-              }
-            }
-            Button {
-              id: createBucketButton
-              text: root.editingBucketId !== "" ? "Save" : "Create"
-              bordered: true
-              foreground: root.contentForeground
-              enabled: newBucketField.text.trim() !== "" && !AgentFeedCore.AgentFeedState.busy
-              onClicked: root.submitBucket()
-            }
-          }
-
-          Row {
-            width: parent.width
-            PanelSectionHeader {
-              width: parent.width - sectionOrderActions.width
-              text: "SECTION"
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-            }
-            Row {
-              id: sectionOrderActions
-              spacing: Style.space(2)
-              PanelActionButton {
-                iconText: "+"
-                tooltipText: "Add active section to feed queue (G)"
-                foreground: root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) >= 0
-                  ? Color.accent : root.dimForeground
-                fontFamily: root.contentFontFamily
-                enabled: AgentFeedCore.AgentFeedState.activeSectionId
-                  !== AgentFeedCore.AgentFeedState.feedSectionId
-                  && root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) < 0
-                onClicked: AgentFeedCore.AgentFeedState.addFeedSection(
-                  AgentFeedCore.AgentFeedState.activeSectionId)
-              }
-              PanelActionButton {
-                iconText: "󱐋"
-                tooltipText: "Switch feed to active section now (Shift+G)"
-                foreground: root.dimForeground
-                fontFamily: "JetBrainsMono Nerd Font"
-                enabled: AgentFeedCore.AgentFeedState.activeSectionId
-                  !== AgentFeedCore.AgentFeedState.feedSectionId
-                onClicked: AgentFeedCore.AgentFeedState.selectFeedSectionNow(
-                  AgentFeedCore.AgentFeedState.activeSectionId)
-              }
-              PanelActionButton {
-                iconText: "‹"
-                tooltipText: "Move active section left"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: root.moveActiveSectionOrder("left")
-              }
-              PanelActionButton {
-                iconText: "›"
-                tooltipText: "Move active section right"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: root.moveActiveSectionOrder("right")
-              }
-              PanelActionButton {
-                iconText: "✎"
-                tooltipText: "Rename active section"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                onClicked: root.beginRenameSection()
-              }
-              PanelActionButton {
-                iconText: "×"
-                tooltipText: "Delete active section; notes move to Unsorted"
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                enabled: !root.selectedSectionIsFallback()
-                onClicked: root.beginDeleteSection()
-              }
-            }
-          }
-
-          Flow {
-            width: parent.width
-            spacing: Style.space(6)
-            Repeater {
-              model: AgentFeedCore.AgentFeedState.sections
-              delegate: Button {
-                required property var modelData
-                text: (modelData.feedCurrent ? "●  "
-                  : (modelData.feedQueuePosition >= 0
-                    ? String(modelData.feedQueuePosition + 1) + "  " : ""))
-                  + modelData.name.toUpperCase() + "  " + modelData.messageCount + " MSG"
-                bordered: true
-                foreground: modelData.id === AgentFeedCore.AgentFeedState.activeSectionId
-                  ? Color.accent : root.contentForeground
-                fontFamily: root.contentFontFamily
-                fontSize: Style.font.caption
-                horizontalPadding: Style.space(8)
-                verticalPadding: Style.space(4)
-                onClicked: AgentFeedCore.AgentFeedState.selectSection(modelData.id)
-              }
-            }
-            Button {
-              text: "+"
-              tooltipText: "Create section"
-              bordered: true
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-              fontSize: Style.font.caption
-              horizontalPadding: Style.space(8)
-              verticalPadding: Style.space(4)
-              onClicked: {
-                root.editingSectionId = ""
-                root.creatingSection = true
-                newSectionField.text = ""
-                Qt.callLater(function() { newSectionField.forceActiveFocus() })
-              }
-            }
-          }
-
-          Column {
-            width: parent.width
-            spacing: Style.space(5)
-            Text {
-              width: parent.width
-              text: (AgentFeedCore.AgentFeedState.feedEnabled ? "FEEDING  ·  " : "READY  ·  ")
-                + (AgentFeedCore.AgentFeedState.feedEnabled
-                  ? AgentFeedCore.AgentFeedState.feedBucketName.toUpperCase()
-                    + " / " + AgentFeedCore.AgentFeedState.feedSectionName.toUpperCase()
-                  : root.selectedBucketName().toUpperCase()
-                    + " / " + root.selectedSectionName().toUpperCase())
-              textFormat: Text.PlainText
-              color: AgentFeedCore.AgentFeedState.feedEnabled ? Color.accent : root.dimForeground
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              elide: Text.ElideRight
-            }
-            Flow {
-              width: parent.width
-              spacing: Style.space(5)
-              Text {
-                visible: AgentFeedCore.AgentFeedState.feedQueue.length === 0
-                text: "QUEUE EMPTY"
-                textFormat: Text.PlainText
-                color: root.dimForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-              }
-              Repeater {
-                model: AgentFeedCore.AgentFeedState.feedQueue
-                delegate: Button {
-                  required property var modelData
-                  text: String(modelData.position + 1) + "  "
-                    + modelData.bucketName.toUpperCase() + " / "
-                    + modelData.sectionName.toUpperCase() + "  ×"
-                  tooltipText: "Remove from feed queue"
-                  bordered: true
-                  foreground: root.contentForeground
-                  fontFamily: root.contentFontFamily
-                  fontSize: Style.font.caption
-                  horizontalPadding: Style.space(7)
-                  verticalPadding: Style.space(3)
-                  onClicked: AgentFeedCore.AgentFeedState.removeFeedSection(modelData.sectionId)
-                }
-              }
-            }
-          }
-
-          BorderSurface {
-            visible: root.deletingSectionId !== ""
-            width: parent.width
-            implicitHeight: deleteSectionFlow.implicitHeight + Style.space(16)
-            color: Util.alpha(root.urgentForeground, 0.05)
-            borderSpec: Border.flat(root.urgentForeground, Style.normalBorderWidth)
-            radius: Style.cornerRadius
-            Flow {
-              id: deleteSectionFlow
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.margins: Style.space(8)
-              spacing: Style.space(6)
-              Text {
-                text: "DELETE SECTION · HANDLE ITS MESSAGES:"
-                textFormat: Text.PlainText
-                color: root.contentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: true
-              }
-              Button {
-                text: "Move to fallback"
-                bordered: true
-                foreground: root.contentForeground
-                fontFamily: root.contentFontFamily
-                fontSize: Style.font.caption
-                onClicked: root.confirmDeleteSection("move")
-              }
-              Button {
-                text: "Delete messages"
-                bordered: true
-                foreground: root.urgentForeground
-                fontFamily: root.contentFontFamily
-                fontSize: Style.font.caption
-                onClicked: root.confirmDeleteSection("discard")
-              }
-              Button {
-                text: "Cancel"
-                bordered: true
-                foreground: root.dimForeground
-                fontFamily: root.contentFontFamily
-                fontSize: Style.font.caption
-                onClicked: root.deletingSectionId = ""
-              }
-            }
-          }
-
-          Row {
-            visible: root.creatingSection
-            width: parent.width
-            spacing: Style.space(6)
-            TextField {
-              id: newSectionField
-              width: parent.width - createSectionButton.width - parent.spacing
-              placeholderText: "New section heading"
-              foreground: root.contentForeground
-              font.family: root.contentFontFamily
-              onAccepted: root.submitSection()
-              Keys.onEscapePressed: {
-                root.creatingSection = false
-                root.editingSectionId = ""
-                text = ""
-                keyCatcher.forceActiveFocus()
-              }
-            }
-            Button {
-              id: createSectionButton
-              text: root.editingSectionId !== "" ? "Save" : "Create"
-              bordered: true
-              foreground: root.contentForeground
-              enabled: newSectionField.text.trim() !== "" && !AgentFeedCore.AgentFeedState.busy
-              onClicked: root.submitSection()
-            }
+            foreground: root.contentForeground
+            dimForeground: root.dimForeground
+            urgentForeground: root.urgentForeground
+            fontFamily: root.contentFontFamily
+            focusTarget: keyCatcher
           }
 
           Row {
@@ -779,80 +356,12 @@ Panel {
             onClicked: AgentFeedCore.AgentFeedState.openBucket()
           }
 
-          SearchableDropdown {
-            id: targetPicker
+          PanelRoutingControls {
+            id: routingControls
             width: parent.width
-            height: implicitHeight
-            label: "TARGET"
-            value: AgentFeedCore.AgentFeedState.selectedDeliveryTargetId
-            options: Presentation.targetDropdownOptions(AgentFeedCore.AgentFeedState.deliveryTargets)
-            triggerLabel: AgentFeedCore.AgentFeedState.selectedDeliveryTargetLabel
-            placeholderText: "Filter Herdr targets..."
-            popupRowHeight: Style.space(42)
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
-            enabled: !AgentFeedCore.AgentFeedState.busy && options.length > 0
-            opacity: enabled ? 1 : 0.55
-            onChanged: function(targetId) {
-              AgentFeedCore.AgentFeedState.selectDeliveryTarget(targetId)
-              keyCatcher.forceActiveFocus()
-            }
-          }
-
-          Row {
-            width: parent.width
-            spacing: Style.space(7)
-
-            SearchableDropdown {
-              id: modePicker
-              width: parent.width - feedButton.width - parent.spacing
-              height: implicitHeight
-              label: "MODE"
-              value: AgentFeedCore.AgentFeedState.deliveryMode
-              options: Presentation.hintedDropdownOptions(AgentFeedCore.AgentFeedState.deliveryModes)
-              placeholderText: "Filter delivery modes..."
-              popupRowHeight: Style.space(42)
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-              enabled: !AgentFeedCore.AgentFeedState.busy
-              onChanged: function(modeId) {
-                AgentFeedCore.AgentFeedState.selectDeliveryMode(modeId)
-                keyCatcher.forceActiveFocus()
-              }
-            }
-
-            Button {
-              id: feedButton
-              width: Style.space(86)
-              height: Style.space(32)
-              anchors.bottom: parent.bottom
-              text: (AgentFeedCore.AgentFeedState.feedEnabled ? "■ ON" : "▶ OFF")
-                + " · Q " + AgentFeedCore.AgentFeedState.pendingCount
-              bordered: true
-              foreground: AgentFeedCore.AgentFeedState.feedEnabled ? Color.accent : root.contentForeground
-              fontFamily: root.contentFontFamily
-              fontSize: Style.font.caption
-              enabled: !AgentFeedCore.AgentFeedState.busy
-              onClicked: AgentFeedCore.AgentFeedState.toggleFeed()
-            }
-          }
-
-          SearchableDropdown {
-            id: orderPicker
-            width: parent.width
-            height: implicitHeight
-            label: "ORDER"
-            value: AgentFeedCore.AgentFeedState.queueOrder
-            options: Presentation.hintedDropdownOptions(AgentFeedCore.AgentFeedState.queueOrders)
-            placeholderText: "Filter queue orders..."
-            popupRowHeight: Style.space(42)
-            foreground: root.contentForeground
-            fontFamily: root.contentFontFamily
-            enabled: !AgentFeedCore.AgentFeedState.busy
-            onChanged: function(orderId) {
-              AgentFeedCore.AgentFeedState.selectQueueOrder(orderId)
-              keyCatcher.forceActiveFocus()
-            }
+            focusTarget: keyCatcher
           }
 
         }

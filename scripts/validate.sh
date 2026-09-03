@@ -12,6 +12,9 @@ qmllint -I "$OMARCHY_PATH/shell" \
   "$plugin_dir/KeybindingsOverlay.qml" \
   "$plugin_dir/NotesOverlay.qml" \
   "$plugin_dir/BindingsOverlay.qml" \
+  "$plugin_dir/PanelBucketControls.qml" \
+  "$plugin_dir/PanelSectionControls.qml" \
+  "$plugin_dir/PanelRoutingControls.qml" \
   "$plugin_dir/BarWidget.qml" \
   "$plugin_dir/Panel.qml"
 python3 -m py_compile \
@@ -20,6 +23,14 @@ python3 -m py_compile \
   "$plugin_dir/scripts/install-workspace.py"
 for module in "$plugin_dir/workspace/js/"*.js; do
   node --check "$module"
+done
+for source in "$plugin_dir"/Panel*.qml "$plugin_dir/workspace/js/"*.js \
+              "$plugin_dir/bin/feed_the_flock/"*.py; do
+  line_count=$(wc -l < "$source")
+  if (( line_count >= 800 )); then
+    echo "$source has $line_count lines; split it before adding more behavior" >&2
+    exit 1
+  fi
 done
 for branded_file in AgentFeedPresentation.js Panel.qml workspace/index.html; do
   grep -Fq '󰆚' "$plugin_dir/$branded_file" || {
@@ -31,19 +42,20 @@ for branded_file in AgentFeedPresentation.js Panel.qml workspace/index.html; do
     exit 1
   fi
 done
-[[ $(grep -Fc 'SearchableDropdown {' "$plugin_dir/Panel.qml") -eq 3 ]] || {
-  echo "Panel.qml must use Omarchy SearchableDropdown for all three routing controls" >&2
+[[ $(grep -Fc 'SearchableDropdown {' "$plugin_dir/PanelRoutingControls.qml") -eq 3 ]] || {
+  echo "PanelRoutingControls.qml must use Omarchy SearchableDropdown for all routing controls" >&2
   exit 1
 }
-if grep -Fq 'ComboBox {' "$plugin_dir/Panel.qml"; then
-  echo "Panel.qml still contains a platform-native ComboBox" >&2
+if grep -Fq 'ComboBox {' "$plugin_dir/PanelRoutingControls.qml"; then
+  echo "PanelRoutingControls.qml still contains a platform-native ComboBox" >&2
   exit 1
 fi
-grep -Fq 'targetPicker.popupOpen || modePicker.popupOpen || orderPicker.popupOpen' \
-  "$plugin_dir/Panel.qml" || {
+grep -Fq '|| modePicker.popupOpen || orderPicker.popupOpen' \
+  "$plugin_dir/PanelRoutingControls.qml" || {
     echo "Panel key handling must pause while a routing dropdown is open" >&2
     exit 1
   }
+grep -Fq '|| routingControls.popupOpen' "$plugin_dir/Panel.qml"
 grep -Fq '"hint": "oldest pending first"' "$plugin_dir/AgentFeedState.qml"
 grep -Fq '"hint": "newest pending first"' "$plugin_dir/AgentFeedState.qml"
 if grep -Eiq 'topmost|bottommost' "$plugin_dir/AgentFeedState.qml"; then
@@ -68,24 +80,24 @@ grep -Fq 'WORKSPACE_BROWSER_DIR = STATE_DIR / "workspace-browser"' \
   "$plugin_dir/bin/feed_the_flock/common.py"
 grep -Fq '"--disable-extensions", "--no-first-run", "--no-default-browser-check"' \
   "$plugin_dir/bin/feed_the_flock/workspace.py"
-grep -Fq "event.stopImmediatePropagation();" "$plugin_dir/workspace/js/app.js"
-grep -Fq "['j', 'k'].includes(key)" "$plugin_dir/workspace/js/app.js"
-grep -Fq "['h', 'l'].includes(key)" "$plugin_dir/workspace/js/app.js"
-grep -Fq "function triggerSelectedAction(key)" "$plugin_dir/workspace/js/app.js"
+grep -Fq "event.stopImmediatePropagation();" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "['j', 'k'].includes(key)" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "['h', 'l'].includes(key)" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "function triggerSelectedAction(key)" "$plugin_dir/workspace/js/viewer-navigation.js"
 grep -Fq "a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'" \
-  "$plugin_dir/workspace/js/app.js"
-grep -Fq "event.key === '/'" "$plugin_dir/workspace/js/app.js"
-grep -Fq "event.key === '?'" "$plugin_dir/workspace/js/app.js"
-grep -Fq "if (!viewerSearchEl.hidden)" "$plugin_dir/workspace/js/app.js"
-grep -Fq "function recoverSearchFocus(event)" "$plugin_dir/workspace/js/app.js"
-grep -Fq "viewerSearchInputEl.setRangeText(event.key" "$plugin_dir/workspace/js/app.js"
-grep -Fq "confirmLabel: 'Move to Unsorted'" "$plugin_dir/workspace/js/app.js"
-if grep -Fq 'Type “${section.name}” to confirm' "$plugin_dir/workspace/js/app.js"; then
+  "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "event.key === '/'" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "event.key === '?'" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "if (!container.hidden)" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "function recoverSearchFocus(event)" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "input.setRangeText(event.key" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "confirmLabel: 'Move to Unsorted'" "$plugin_dir/workspace/js/section-view.js"
+if grep -Fq 'Type “${section.name}” to confirm' "$plugin_dir/workspace/js/section-view.js"; then
   echo "section clearing still uses typed-title confirmation" >&2
   exit 1
 fi
 if grep -Fq "deleteSection.disabled = section.systemKind === 'unsorted'" \
-    "$plugin_dir/workspace/js/app.js"; then
+    "$plugin_dir/workspace/js/section-view.js"; then
   echo "fallback section still renders an impossible delete action" >&2
   exit 1
 fi

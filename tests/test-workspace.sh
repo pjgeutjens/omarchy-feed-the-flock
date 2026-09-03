@@ -4,7 +4,8 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
 server=''
-trap '[[ -z $server ]] || kill "$server" 2>/dev/null || true; rm -rf "$tmp"' EXIT
+browser=''
+trap '[[ -z $browser ]] || kill "$browser" 2>/dev/null || true; [[ -z $server ]] || kill "$server" 2>/dev/null || true; rm -rf "$tmp"' EXIT
 export AGENT_FEED_STATE_DIR="$tmp/state" AGENT_FEED_EXPORT_DIR="$tmp/exports"
 export AGENT_FEED_WORKSPACE_PORT=47832
 export AGENT_FEED_DISABLE_WORKER=1 AGENT_FEED_HERDR="$tmp/herdr"
@@ -124,17 +125,36 @@ curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="routing-card"'
 curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="reset-all"'
 curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="viewer-search-input"'
 curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "request('/api/notes/reset-all'"
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "['j', 'k'].includes(key)"
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "['h', 'l'].includes(key)"
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'function triggerSelectedAction(key)'
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'"
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'event.stopImmediatePropagation();'
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "event.key === '/'"
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "event.key === '?'"
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'if (!viewerSearchEl.hidden)'
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'function recoverSearchFocus(event)'
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'viewerSearchInputEl.setRangeText(event.key'
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "['j', 'k'].includes(key)"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "['h', 'l'].includes(key)"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'function triggerSelectedAction(key)'
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'event.stopImmediatePropagation();'
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "event.key === '/'"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "event.key === '?'"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'if (!container.hidden)'
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'function recoverSearchFocus(event)'
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'input.setRangeText(event.key'
 curl -fsS http://127.0.0.1:47832/js/routing.js | grep -Fq "request('/api/routing'"
+
+chromium --headless=new --disable-gpu --no-first-run --no-default-browser-check \
+  --remote-debugging-port=0 --user-data-dir="$tmp/chromium" \
+  'http://127.0.0.1:47832/?bucket=inbox' >"$tmp/chromium.log" 2>&1 &
+browser=$!
+for _ in {1..60}; do
+  [[ -s $tmp/chromium/DevToolsActivePort ]] && break
+  sleep 0.1
+done
+[[ -s $tmp/chromium/DevToolsActivePort ]] || {
+  cat "$tmp/chromium.log" >&2
+  exit 1
+}
+debug_port=$(head -n 1 "$tmp/chromium/DevToolsActivePort")
+node "$root/tests/test-viewer-keyboard.mjs" "$debug_port" \
+  'http://127.0.0.1:47832/?bucket=inbox'
+kill "$browser" 2>/dev/null || true
+wait "$browser" 2>/dev/null || true
+browser=''
 
 routing=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data '{"targetId":"herdr:w1:p2","deliveryMode":"idle-all-batch","queueOrder":"lifo"}' \
@@ -246,9 +266,9 @@ jq -e --arg id "$unsorted_id" \
 curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer' \
   | jq -e --arg id "$clear_section_id" \
     '.noteCount == 0 and ([.sections[] | select(.id == $id) | .notes] == [[]])' >/dev/null
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "confirmLabel: 'Move to Unsorted'"
-if curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'Type “${section.name}” to confirm'; then
+curl -fsS http://127.0.0.1:47832/js/section-view.js | grep -Fq "confirmLabel: 'Move to Unsorted'"
+if curl -fsS http://127.0.0.1:47832/js/section-view.js | grep -Fq 'Type “${section.name}” to confirm'; then
   echo 'workspace still uses typed-title section clearing' >&2
   exit 1
 fi
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "request('/api/section/clear'"
+curl -fsS http://127.0.0.1:47832/js/section-view.js | grep -Fq "request('/api/section/clear'"
