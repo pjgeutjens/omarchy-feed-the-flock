@@ -59,6 +59,10 @@ done
   echo "PanelRoutingControls.qml must use Omarchy SearchableDropdown for all routing controls" >&2
   exit 1
 }
+[[ $(grep -Fc 'showLabel: false' "$plugin_dir/PanelRoutingControls.qml") -eq 3 ]] || {
+  echo "routing controls must keep labels inline so the panel fits without scrolling" >&2
+  exit 1
+}
 if grep -Fq 'ComboBox {' "$plugin_dir/PanelRoutingControls.qml"; then
   echo "PanelRoutingControls.qml still contains a platform-native ComboBox" >&2
   exit 1
@@ -69,6 +73,11 @@ grep -Fq '|| modePicker.popupOpen || orderPicker.popupOpen' \
     exit 1
   }
 grep -Fq '|| routingControls.popupOpen' "$plugin_dir/Panel.qml"
+grep -Fq 'panelColumn.implicitHeight + fixedFooter.implicitHeight + Style.space(7)' \
+  "$plugin_dir/Panel.qml" || {
+  echo "panel height must reserve room for its fixed footer" >&2
+  exit 1
+}
 if grep -Fq 'prepareBindings()' "$plugin_dir/Panel.qml"; then
   echo "opening keybinding settings must not modify user configuration" >&2
   exit 1

@@ -36,6 +36,12 @@ cli="$root/bin/feed-the-flock"
 "$cli" init
 state=$("$cli" state)
 jq -e '.activeBucketId == "inbox" and (.buckets | length) == 3 and .totalCount == 0' <<< "$state" >/dev/null
+"$cli" bucket delete ideas
+"$cli" init
+jq -e '(.buckets | length) == 2 and ([.buckets[].id] | index("ideas")) == null' \
+  <<< "$("$cli" state)" >/dev/null
+"$cli" bucket add "Ideas"
+"$cli" bucket select inbox
 targets=$("$cli" targets)
 jq -e '.selectedTargetId == "" and .selectedTargetLabel == "Target unavailable"
   and ([.targets[].kind] | all(. == "herdr"))

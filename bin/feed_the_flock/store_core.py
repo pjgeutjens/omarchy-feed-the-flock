@@ -150,10 +150,18 @@ def _open_connection() -> sqlite3.Connection:
         "WHERE claimed_at IS NOT NULL AND claimed_at < ?",
         (int(time.time()) - 60,),
     )
-    for position, (bucket_id, name) in enumerate(DEFAULT_BUCKETS):
+    defaults_initialized = db.execute(
+        "SELECT 1 FROM settings WHERE key = 'initial_buckets_created'"
+    ).fetchone()
+    if not defaults_initialized:
+        if db.execute("SELECT COUNT(*) FROM buckets").fetchone()[0] == 0:
+            for position, (bucket_id, name) in enumerate(DEFAULT_BUCKETS):
+                db.execute(
+                    "INSERT INTO buckets(id, name, position) VALUES (?, ?, ?)",
+                    (bucket_id, name, position),
+                )
         db.execute(
-            "INSERT OR IGNORE INTO buckets(id, name, position) VALUES (?, ?, ?)",
-            (bucket_id, name, position),
+            "INSERT INTO settings(key, value) VALUES ('initial_buckets_created', '1')"
         )
     for row in db.execute("SELECT id FROM buckets"):
         ensure_unsorted_section(db, row[0])

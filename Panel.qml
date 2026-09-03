@@ -168,7 +168,10 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(650))
-    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(650))
+    contentHeight: panel.fittedContentHeight(
+      panelColumn.implicitHeight + fixedFooter.implicitHeight + Style.space(7),
+      Style.space(650)
+    )
 
     FeedTheFlockKeyCatcher {
       id: keyCatcher
