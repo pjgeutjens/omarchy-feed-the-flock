@@ -179,21 +179,27 @@ export function createSectionRenderer({
       deleteSection.className = 'section-action delete';
       deleteSection.type = 'button';
       deleteSection.dataset.viewerAction = 'delete';
-      deleteSection.title = 'Delete section (Delete); move notes to Unsorted';
+      deleteSection.title = section.notes.length
+        ? 'Delete section (Delete); move notes to Unsorted'
+        : 'Delete empty section (Delete)';
       deleteSection.setAttribute('aria-keyshortcuts', 'Delete');
       deleteSection.textContent = '×';
       deleteSection.onclick = async () => {
-        const choice = await showModal({
-          title: `Delete ${section.name}?`,
-          message: `${section.notes.length} messages are in this section. Move them to the fallback section, or permanently delete them with the section.`,
-          confirmLabel: 'Move messages and delete',
-          secondaryLabel: 'Delete messages and section'
-        });
-        if (choice === null) return;
+        let notesMode = 'discard';
+        if (section.notes.length) {
+          const choice = await showModal({
+            title: `Delete ${section.name}?`,
+            message: `${section.notes.length} messages are in this section. Move them to the fallback section, or permanently delete them with the section.`,
+            confirmLabel: 'Move messages and delete',
+            secondaryLabel: 'Delete messages and section'
+          });
+          if (choice === null) return;
+          notesMode = choice === 'secondary' ? 'discard' : 'move';
+        }
         try {
           await request('/api/section/delete', {
             method: 'POST', body: JSON.stringify({
-              id: section.id, notes: choice === 'secondary' ? 'discard' : 'move'
+              id: section.id, notes: notesMode
             })
           });
           await load();

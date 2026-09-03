@@ -318,6 +318,22 @@ try {
     'S opened the wrong action');
   await press({ key: 'Escape', code: 'Escape', keyCode: 27 });
 
+  assert(await evaluate(`(() => {
+    const section = [...document.querySelectorAll('section')]
+      .find(item => item.querySelector('h2')?.textContent === 'Drag last');
+    const button = section?.querySelector('[data-viewer-action="delete"]');
+    if (!button) return false;
+    button.click();
+    return true;
+  })()`), 'empty section delete action is unavailable');
+  assert(await evaluate(`document.querySelector('#modal-backdrop').hidden`),
+    'deleting an empty section opened a confirmation dialog');
+  await waitFor(
+    `![...document.querySelectorAll('section h2')]
+      .some(heading => heading.textContent === 'Drag last')`,
+    'empty section deletion'
+  );
+
   await evaluate(`fetch('/api/feed', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'stop' })
