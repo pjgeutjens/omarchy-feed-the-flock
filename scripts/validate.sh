@@ -73,6 +73,12 @@ grep -Fq '|| modePicker.popupOpen || orderPicker.popupOpen' \
     exit 1
   }
 grep -Fq '|| routingControls.popupOpen' "$plugin_dir/Panel.qml"
+grep -Fq 'FeedTheFlockState.recordBinding' "$plugin_dir/Panel.qml"
+grep -Fq 'No recording shortcut assigned · K to configure' "$plugin_dir/Panel.qml"
+if grep -Fq 'Shift+F9 captures into this bucket / section' "$plugin_dir/Panel.qml"; then
+  echo "capture hint must reflect the configured recording shortcut" >&2
+  exit 1
+fi
 grep -Fq 'panelColumn.implicitHeight + fixedFooter.implicitHeight + Style.space(7)' \
   "$plugin_dir/Panel.qml" || {
   echo "panel height must reserve room for its fixed footer" >&2

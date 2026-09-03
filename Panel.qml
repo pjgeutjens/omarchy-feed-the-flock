@@ -46,6 +46,13 @@ Panel {
     return bucket + " / " + section
   }
 
+  function recordingShortcutHint() {
+    var binding = String(FeedTheFlockCore.FeedTheFlockState.recordBinding || "").trim()
+    return binding !== ""
+      ? binding + " captures into this bucket / section"
+      : "No recording shortcut assigned · K to configure"
+  }
+
   function cycleBucket(delta) {
     var values = FeedTheFlockCore.FeedTheFlockState.buckets
     if (values.length === 0 || FeedTheFlockCore.FeedTheFlockState.busy) return
@@ -305,7 +312,7 @@ Panel {
                 ? "Speak now — capturing into " + root.captureDestination()
                 : (FeedTheFlockCore.FeedTheFlockState.processing
                   ? "Transcribing into " + root.captureDestination()
-                  : "Shift+F9 captures into this bucket / section")
+                  : root.recordingShortcutHint())
               textFormat: Text.PlainText
               color: root.dimForeground
               font.family: root.contentFontFamily
