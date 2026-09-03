@@ -347,6 +347,29 @@ try {
   await waitFor(`document.querySelector('#routing-backdrop').hidden`,
     'Enter did not apply and close routing');
 
+  await evaluate(`(() => {
+    window.__routingFetch = window.fetch;
+    window.fetch = (...arguments_) => String(arguments_[0]).includes('/api/targets')
+      ? new Promise(() => {}) : window.__routingFetch(...arguments_);
+  })()`);
+  await press({ key: 't', code: 'KeyT', keyCode: 84 });
+  await waitFor(`!document.querySelector('#routing-backdrop').hidden`,
+    'routing dialog did not open for loading-state cancellation');
+  await waitFor(`document.activeElement?.id === 'routing-cancel'`,
+    'routing Cancel did not receive focus while targets were loading');
+  assert(await evaluate(`!document.querySelector('#routing-cancel').disabled`),
+    'routing Cancel was disabled while targets were loading');
+  await evaluate(`document.querySelector('#routing-cancel').click()`);
+  await waitFor(`document.querySelector('#routing-backdrop').hidden`,
+    'Cancel did not close routing while targets were loading');
+  await press({ key: 't', code: 'KeyT', keyCode: 84 });
+  await waitFor(`!document.querySelector('#routing-backdrop').hidden`,
+    'routing dialog did not reopen for loading-state Escape');
+  await press({ key: 'Escape', code: 'Escape', keyCode: 27 });
+  await waitFor(`document.querySelector('#routing-backdrop').hidden`,
+    'Escape did not close routing while targets were loading');
+  await evaluate(`window.fetch = window.__routingFetch; delete window.__routingFetch`);
+
   await command('Emulation.setDeviceMetricsOverride', {
     width: 900, height: 480, deviceScaleFactor: 1, mobile: false
   });

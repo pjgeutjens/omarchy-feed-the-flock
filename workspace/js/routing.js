@@ -82,13 +82,14 @@ function setBusy(value) {
   targetSelect.disabled = value;
   modeSelect.disabled = value;
   orderSelect.disabled = value;
-  cancel.disabled = value;
+  cancel.disabled = false;
   apply.disabled = value;
 }
 
 function closeRouting() {
-  if (!open || busy) return;
+  if (!open) return;
   open = false;
+  busy = false;
   session += 1;
   backdrop.hidden = true;
   appliedCallback = null;
@@ -109,6 +110,7 @@ export async function openRouting({ onApplied } = {}) {
   setMessage('Loading current routing…');
   setBusy(true);
   backdrop.hidden = false;
+  requestAnimationFrame(() => cancel.focus());
 
   try {
     const data = await request('/api/targets');
@@ -183,6 +185,12 @@ card.addEventListener('submit', async event => {
 backdrop.addEventListener('mousedown', event => {
   if (event.target === backdrop) closeRouting();
 });
+document.addEventListener('keydown', event => {
+  if (!open || event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closeRouting();
+}, true);
 backdrop.addEventListener('keydown', event => {
   const focusedSelect = event.target instanceof HTMLSelectElement ? event.target : null;
   const key = event.key.toLowerCase();
@@ -192,7 +200,7 @@ backdrop.addEventListener('keydown', event => {
   } else if (!busy && focusedSelect && event.key === 'Enter' && !apply.disabled) {
     event.preventDefault();
     card.requestSubmit();
-  } else if (event.key === 'Escape' && !busy) {
+  } else if (event.key === 'Escape') {
     event.preventDefault();
     closeRouting();
   } else if (event.key === 'Tab') {
