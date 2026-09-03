@@ -69,7 +69,8 @@ Column {
       text: (FeedTheFlockCore.FeedTheFlockState.feedEnabled ? "■ ON" : "▶ OFF")
         + " · Q " + FeedTheFlockCore.FeedTheFlockState.pendingCount
       bordered: true
-      foreground: FeedTheFlockCore.FeedTheFlockState.feedEnabled ? Color.accent : root.foreground
+      foreground: Color.accent
+      active: FeedTheFlockCore.FeedTheFlockState.feedEnabled
       fontFamily: root.fontFamily
       fontSize: Style.font.caption
       enabled: !FeedTheFlockCore.FeedTheFlockState.busy
