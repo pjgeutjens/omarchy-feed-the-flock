@@ -22,6 +22,7 @@ WORKSPACE_HOST = "127.0.0.1"
 WORKSPACE_PORT = int(os.environ.get("AGENT_FEED_WORKSPACE_PORT", "47731"))
 WORKSPACE_HTML = PLUGIN_ROOT / "workspace/index.html"
 WORKSPACE_LOG = STATE_DIR / "workspace.log"
+WORKSPACE_BROWSER_DIR = STATE_DIR / "workspace-browser"
 FEED_LOG = STATE_DIR / "feed.log"
 FEED_LOCK = STATE_DIR / "feed.lock"
 FEED_RESUME_LOCK = STATE_DIR / "feed-resume.lock"

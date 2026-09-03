@@ -13,6 +13,12 @@ section.feed-queued {
   border-radius: 10px; background: color-mix(in srgb, var(--accent) 3%, transparent);
 }
 section.section-drop { border-top-color: var(--accent); }
+section:focus { outline: none; }
+section.selected > .section-heading {
+  margin-inline: -8px; padding-inline: 8px; border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: inset 3px 0 var(--accent);
+}
 .section-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
 .section-heading h2 { flex: 1; }
 .feed-section-label {

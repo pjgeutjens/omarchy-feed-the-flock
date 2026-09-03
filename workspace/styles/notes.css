@@ -2,6 +2,11 @@
   margin: 4px 0; padding: 7px 6px;
   border: 0; border-left: 3px solid var(--faint); border-radius: 2px;
   background: color-mix(in srgb, var(--text) 3%, transparent);
+  outline: none;
+}
+.note.selected {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .feed-timeline .note {
   margin-left: 0;
@@ -129,6 +134,8 @@
 .note:hover .note-action.feed-now, .note:focus-within .note-action.feed-now,
 .note:hover .sent-toggle, .note:focus-within .sent-toggle,
 .note:hover .delete-note, .note:focus-within .delete-note,
+.note.selected .note-action.feed-now, .note.selected .sent-toggle,
+.note.selected .delete-note,
 .note.sent .sent-toggle { opacity: 1; }
 .note-action.feed-now:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .sent-toggle:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }

@@ -738,13 +738,15 @@ def rename_section(args: argparse.Namespace) -> None:
         db.commit()
 
 
-def clear_section_notes(section_id: str, confirmation: str) -> dict[str, object]:
-    if not section_id or confirmation != section_id:
-        raise ValueError("explicit section-clear confirmation does not match")
+def clear_section_notes(section_id: str, notes_mode: str) -> dict[str, object]:
+    if not section_id:
+        raise ValueError("section id is required")
+    if notes_mode not in {"move", "discard"}:
+        raise ValueError("invalid section note handling")
     with connect() as db:
         db.execute("BEGIN IMMEDIATE")
         section = db.execute(
-            "SELECT id, name FROM sections WHERE id = ?", (section_id,)
+            "SELECT id, name, bucket_id, system_kind FROM sections WHERE id = ?", (section_id,)
         ).fetchone()
         if not section:
             raise ValueError("section no longer exists")
@@ -762,6 +764,24 @@ def clear_section_notes(section_id: str, confirmation: str) -> dict[str, object]
                 tuple(note_ids),
             ).fetchone():
                 raise ValueError("wait for active delivery to finish before clearing this section")
+        attachment_count = 0
+        attachment_paths: list[Path] = []
+        moved_count = 0
+        if note_ids and notes_mode == "move":
+            if section["system_kind"] == "unsorted":
+                raise ValueError("notes are already in Unsorted")
+            destination = ensure_unsorted_section(db, str(section["bucket_id"]))
+            next_position = db.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM notes WHERE section_id = ?",
+                (destination,),
+            ).fetchone()[0]
+            for offset, note_id in enumerate(note_ids):
+                db.execute(
+                    "UPDATE notes SET section_id = ?, position = ? WHERE id = ?",
+                    (destination, next_position + offset, note_id),
+                )
+            moved_count = len(note_ids)
+        elif note_ids:
             attachment_count = db.execute(
                 f"SELECT COUNT(*) FROM attachments WHERE note_id IN ({placeholders})",
                 tuple(note_ids),
@@ -771,22 +791,21 @@ def clear_section_notes(section_id: str, confirmation: str) -> dict[str, object]
                 f"DELETE FROM feed_queue WHERE note_id IN ({placeholders})", tuple(note_ids)
             )
             db.execute(f"DELETE FROM notes WHERE id IN ({placeholders})", tuple(note_ids))
-        else:
-            attachment_count = 0
-            attachment_paths = []
         db.commit()
     unlink_attachment_files(attachment_paths)
     return {
         "ok": True,
         "sectionId": section_id,
         "sectionName": str(section["name"]),
-        "deletedNotes": len(note_ids),
+        "mode": notes_mode,
+        "movedNotes": moved_count,
+        "deletedNotes": len(note_ids) if notes_mode == "discard" else 0,
         "deletedAttachments": int(attachment_count),
     }
 
 
 def clear_section(args: argparse.Namespace) -> None:
-    print(json.dumps(clear_section_notes(args.section_id, args.confirm), ensure_ascii=False))
+    print(json.dumps(clear_section_notes(args.section_id, args.notes), ensure_ascii=False))
 
 
 def delete_section(args: argparse.Namespace) -> None:
@@ -1038,6 +1057,34 @@ def set_note_sent(args: argparse.Namespace) -> None:
         db.commit()
 
 
+def reset_all_notes() -> int:
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if setting(db, "feed_enabled", "0") == "1":
+            raise ValueError("stop the feed before resetting all notes")
+        if db.execute(
+            "SELECT 1 FROM feed_queue WHERE claim_token IS NOT NULL LIMIT 1"
+        ).fetchone():
+            raise ValueError("wait for the active submission to finish before resetting all notes")
+        db.execute(
+            "INSERT OR IGNORE INTO feed_queue(note_id, enqueued_at) "
+            "SELECT id, created_at FROM notes"
+        )
+        reset_count = int(db.execute(
+            "SELECT COUNT(*) FROM feed_queue WHERE delivered_at IS NOT NULL"
+        ).fetchone()[0])
+        db.execute(
+            "UPDATE feed_queue SET delivered_at = NULL, error = '', claim_token = NULL, "
+            "claimed_at = NULL, delivery_kind = NULL, delivery_sequence = NULL"
+        )
+        set_setting(db, "active_delivery_notes", "[]")
+        set_setting(db, "active_delivery_target", "")
+        set_setting(db, "active_delivery_started", "0")
+        set_setting(db, "active_delivery_observed", "0")
+        db.commit()
+    return reset_count
+
+
 def delete_note(args: argparse.Namespace) -> None:
     with connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -1053,5 +1100,3 @@ def delete_note(args: argparse.Namespace) -> None:
             )
         db.commit()
     unlink_attachment_files(attachment_paths)
-
-

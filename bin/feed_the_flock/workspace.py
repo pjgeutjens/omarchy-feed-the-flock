@@ -31,6 +31,7 @@ from .common import (
     OMARCHY_USER_THEMES,
     STATE_DIR,
     WORKSPACE_HOST,
+    WORKSPACE_BROWSER_DIR,
     WORKSPACE_HTML,
     WORKSPACE_LOG,
     WORKSPACE_PORT,
@@ -56,6 +57,7 @@ from .store import (
     move_bucket,
     place_section,
     remove_feed_section_queue,
+    reset_all_notes,
     rename_bucket,
     rename_section,
     select_feed_section,
@@ -870,6 +872,11 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                 ))
                 self.json_response(200, {"feedEnabled": action == "start"})
                 return
+            if parsed.path == "/api/notes/reset-all":
+                self.json_response(200, {
+                    "ok": True, "resetCount": reset_all_notes(),
+                })
+                return
             if parsed.path == "/api/bucket/export":
                 with connect() as db:
                     path = write_bucket_export(db, str(value.get("id", "")))
@@ -936,7 +943,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/section/clear":
                 section_id = str(value.get("id", ""))
                 self.json_response(200, clear_section_notes(
-                    section_id, str(value.get("confirmation", "")),
+                    section_id, str(value.get("notes", "")),
                 ))
                 return
             if parsed.path == "/api/section/delete":
@@ -1109,8 +1116,14 @@ def workspace_bucket(args: argparse.Namespace) -> None:
         else:
             raise SystemExit(f"feed-the-flock: workspace did not start; see {WORKSPACE_LOG}")
     url = f"http://{WORKSPACE_HOST}:{WORKSPACE_PORT}/?bucket={urllib.parse.quote(bucket_id)}"
+    WORKSPACE_BROWSER_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    WORKSPACE_BROWSER_DIR.chmod(0o700)
     subprocess.Popen(
-        ["omarchy-launch-webapp", url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+        [
+            "omarchy-launch-webapp", url,
+            f"--user-data-dir={WORKSPACE_BROWSER_DIR}",
+            "--disable-extensions", "--no-first-run", "--no-default-browser-check",
+        ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL, start_new_session=True,
     )
     print(url)

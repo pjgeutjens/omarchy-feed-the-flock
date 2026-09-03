@@ -17,6 +17,30 @@
   transition: opacity 140ms ease, transform 140ms ease;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+.viewer-search {
+  position: fixed; z-index: 45; top: 16px; left: 50%; transform: translateX(-50%);
+  display: grid; grid-template-columns: minmax(220px, 440px) auto auto;
+  gap: 7px; align-items: center; width: min(560px, calc(100vw - 32px));
+  padding: 8px; border: 1px solid var(--faint); border-radius: 8px;
+  background: var(--bg); box-shadow: 0 14px 40px rgba(0,0,0,.45);
+}
+.viewer-search[hidden] { display: none; }
+.viewer-search input {
+  min-width: 0; border: 1px solid var(--faint); border-radius: 5px;
+  padding: 7px 9px; background: color-mix(in srgb, var(--bg) 92%, var(--text));
+  color: var(--text); font: inherit; outline: none;
+}
+.viewer-search input:focus { border-color: var(--accent); }
+.viewer-search-count { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.viewer-search button {
+  width: 28px; height: 28px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--muted); cursor: pointer; font: 18px/1 inherit;
+}
+.viewer-search button:hover {
+  color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.search-match { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.search-current { box-shadow: 0 0 0 1px var(--accent); }
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
   padding: 24px; background: color-mix(in srgb, var(--bg) 72%, transparent);
@@ -31,7 +55,7 @@
 }
 .modal-eyebrow { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .modal-card h2 { margin: 5px 0 0; font-size: 24px; }
-.modal-message { margin: 10px 0 0; color: var(--muted); }
+.modal-message { margin: 10px 0 0; color: var(--muted); white-space: pre-line; }
 .modal-input {
   width: 100%; margin-top: 16px; padding: 10px 11px;
   border: 1px solid var(--faint); border-radius: 7px;

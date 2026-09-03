@@ -16,9 +16,18 @@ const targetNameEl = document.querySelector('#target-name');
 const feedQueueEl = document.querySelector('#feed-queue-list');
 const feedToggleEl = document.querySelector('#feed-toggle');
 const bucketTrainEl = document.querySelector('#bucket-train');
+const resetAllEl = document.querySelector('#reset-all');
+const viewerSearchEl = document.querySelector('#viewer-search');
+const viewerSearchInputEl = document.querySelector('#viewer-search-input');
+const viewerSearchCountEl = document.querySelector('#viewer-search-count');
+const viewerSearchCloseEl = document.querySelector('#viewer-search-close');
 let selectedTargetId = '';
 let activeNoteIds = [];
 let currentDocument = null;
+let selectedNoteId = '';
+let selectedSectionId = '';
+let searchMatches = [];
+let searchIndex = -1;
 let draggingId = null;
 let draggingSectionId = null;
 let editing = false;
@@ -69,6 +78,24 @@ document.querySelector('#bucket-left').onclick = () =>
   bucketAction('/api/bucket/move', { id: bucketId, direction: 'left' });
 document.querySelector('#bucket-right').onclick = () =>
   bucketAction('/api/bucket/move', { id: bucketId, direction: 'right' });
+
+resetAllEl.onclick = async () => {
+  resetAllEl.disabled = true;
+  try {
+    const result = await request('/api/notes/reset-all', {
+      method: 'POST', body: '{}'
+    });
+    await loadBuckets(bucketId);
+    await load();
+    showToast(result.resetCount
+      ? `${result.resetCount} notes reset to unsent`
+      : 'All notes are already unsent');
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    resetAllEl.disabled = false;
+  }
+};
 
 async function exportBucket() {
   try {
@@ -384,6 +411,8 @@ function noteElement(note, sectionId) {
   const row = document.createElement('div');
   row.className = `note${note.sent ? ' sent' : ''}${note.active ? ' active' : ''}${note.jumpedQueue ? ' jumped' : ''}`;
   row.dataset.noteId = note.id;
+  row.tabIndex = note.id === selectedNoteId ? 0 : -1;
+  if (note.id === selectedNoteId) row.classList.add('selected');
 
   const handle = document.createElement('button');
   handle.className = 'handle';
@@ -418,11 +447,13 @@ function noteElement(note, sectionId) {
   text.textContent = note.text;
   row.addEventListener('click', event => {
     if (event.target.closest('.handle, .note-action') || text.isContentEditable) return;
+    selectNote(row, false);
     copyText(text.innerText);
   });
   row.addEventListener('contextmenu', event => {
     if (event.target.closest('.handle')) return;
     event.preventDefault();
+    selectNote(row, false);
     beginEditing(text);
   });
   text.addEventListener('blur', async () => {
@@ -569,7 +600,9 @@ function noteElement(note, sectionId) {
     const addImage = document.createElement('button');
     addImage.className = 'attachment-add-inline note-action';
     addImage.type = 'button';
-    addImage.title = 'Add image';
+    addImage.dataset.viewerAction = 'add';
+    addImage.title = 'Add image (A)';
+    addImage.setAttribute('aria-keyshortcuts', 'A');
     addImage.setAttribute('aria-label', addImage.title);
     const addImageGlyph = document.createElement('span');
     addImageGlyph.className = 'add-image-glyph';
@@ -604,8 +637,10 @@ function noteElement(note, sectionId) {
   const feedNow = document.createElement('button');
   feedNow.className = 'feed-now note-action';
   feedNow.type = 'button';
+  feedNow.dataset.viewerAction = 'feed';
   feedNow.hidden = note.sent;
-  feedNow.title = 'Feed now — submit immediately, even while the agent is working';
+  feedNow.title = 'Feed now (F) — submit immediately, even while the agent is working';
+  feedNow.setAttribute('aria-keyshortcuts', 'F');
   feedNow.setAttribute('aria-label', feedNow.title);
   feedNow.textContent = '⚡︎';
   feedNow.addEventListener('click', async event => {
@@ -626,8 +661,10 @@ function noteElement(note, sectionId) {
   const sent = document.createElement('button');
   sent.className = 'sent-toggle note-action';
   sent.type = 'button';
+  sent.dataset.viewerAction = 'requeue';
   sent.hidden = !note.sent;
-  sent.title = 'Requeue submitted note';
+  sent.title = 'Requeue submitted note (R)';
+  sent.setAttribute('aria-keyshortcuts', 'R');
   sent.setAttribute('aria-label', sent.title);
   sent.textContent = '↶';
   sent.addEventListener('click', async event => {
@@ -644,8 +681,10 @@ function noteElement(note, sectionId) {
   const remove = document.createElement('button');
   remove.className = 'delete-note note-action';
   remove.type = 'button';
-  remove.title = 'Delete paragraph';
-  remove.setAttribute('aria-label', 'Delete paragraph');
+  remove.dataset.viewerAction = 'delete';
+  remove.title = 'Delete paragraph (Delete)';
+  remove.setAttribute('aria-label', remove.title);
+  remove.setAttribute('aria-keyshortcuts', 'Delete');
   remove.textContent = '×';
   remove.addEventListener('click', async event => {
     event.stopPropagation();
@@ -663,9 +702,198 @@ function noteElement(note, sectionId) {
   return row;
 }
 
+function selectNote(row, scroll = true) {
+  document.querySelectorAll('section.selected').forEach(section => {
+    section.classList.remove('selected');
+    section.tabIndex = -1;
+  });
+  selectedSectionId = '';
+  document.querySelectorAll('.note.selected').forEach(note => {
+    note.classList.remove('selected');
+    note.tabIndex = -1;
+  });
+  selectedNoteId = row.dataset.noteId || '';
+  row.classList.add('selected');
+  row.tabIndex = 0;
+  row.focus({ preventScroll: true });
+  if (scroll) row.scrollIntoView({ block: 'nearest' });
+}
+
+function navigateNotes(direction) {
+  const notes = [...document.querySelectorAll('.note')].filter(note => note.checkVisibility());
+  if (!notes.length) return false;
+  const selected = document.querySelector('.note.selected');
+  const current = selected ? notes.indexOf(selected) : -1;
+  const next = current < 0
+    ? direction > 0 ? 0 : notes.length - 1
+    : Math.max(0, Math.min(notes.length - 1, current + direction));
+  selectNote(notes[next]);
+  return true;
+}
+
+function selectSection(section, scroll = true) {
+  document.querySelectorAll('.note.selected').forEach(note => {
+    note.classList.remove('selected');
+    note.tabIndex = -1;
+  });
+  selectedNoteId = '';
+  document.querySelectorAll('section.selected').forEach(candidate => {
+    candidate.classList.remove('selected');
+    candidate.tabIndex = -1;
+  });
+  selectedSectionId = section.dataset.sectionId || '';
+  section.classList.add('selected');
+  section.tabIndex = 0;
+  section.focus({ preventScroll: true });
+  if (scroll) section.querySelector('.section-heading')?.scrollIntoView({ block: 'nearest' });
+}
+
+function navigateSections(direction) {
+  const sections = [...document.querySelectorAll('main section')]
+    .filter(section => section.checkVisibility());
+  if (!sections.length) return false;
+  const selected = document.querySelector('section.selected');
+  const current = selected ? sections.indexOf(selected) : -1;
+  const next = current < 0
+    ? direction > 0 ? 0 : sections.length - 1
+    : Math.max(0, Math.min(sections.length - 1, current + direction));
+  selectSection(sections[next]);
+  return true;
+}
+
+function clickSelectedAction(scope, action) {
+  const button = scope?.querySelector(`[data-viewer-action="${action}"]`);
+  if (!button || button.disabled || button.hidden || !button.checkVisibility()) return false;
+  button.click();
+  return true;
+}
+
+function triggerSelectedAction(key) {
+  const note = document.querySelector('.note.selected');
+  if (note) {
+    if (key === 'enter') {
+      const text = note.querySelector('.text');
+      if (!text) return false;
+      beginEditing(text);
+      return true;
+    }
+    if (key === 'y') {
+      const text = note.querySelector('.text');
+      if (!text) return false;
+      copyText(text.innerText);
+      return true;
+    }
+    const action = { a: 'add', f: 'feed', r: 'requeue', delete: 'delete' }[key];
+    return action ? clickSelectedAction(note, action) : false;
+  }
+
+  const section = document.querySelector('section.selected');
+  if (!section) return false;
+  const action = {
+    a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'
+  }[key];
+  return action ? clickSelectedAction(section, action) : false;
+}
+
+function clearSearchMatches() {
+  document.querySelectorAll('.search-match, .search-current').forEach(element => {
+    element.classList.remove('search-match', 'search-current');
+  });
+  searchMatches = [];
+  searchIndex = -1;
+  viewerSearchCountEl.textContent = '0/0';
+}
+
+function focusSearchMatch(index) {
+  if (!searchMatches.length) return;
+  document.querySelector('.search-current')?.classList.remove('search-current');
+  searchIndex = (index + searchMatches.length) % searchMatches.length;
+  const match = searchMatches[searchIndex];
+  match.classList.add('search-current');
+  const note = match.closest('.note');
+  if (note) selectNote(note, false);
+  else {
+    const section = match.closest('section');
+    if (section) selectSection(section, false);
+  }
+  match.scrollIntoView({ block: 'center' });
+  viewerSearchCountEl.textContent = `${searchIndex + 1}/${searchMatches.length}`;
+}
+
+function updateSearchMatches(selectFirst = true) {
+  clearSearchMatches();
+  const query = viewerSearchInputEl.value.trim().toLocaleLowerCase();
+  if (!query) return;
+  searchMatches = [...document.querySelectorAll('section h2, .note .text')].filter(element =>
+    element.checkVisibility() && element.textContent.toLocaleLowerCase().includes(query)
+  );
+  searchMatches.forEach(element => element.classList.add('search-match'));
+  viewerSearchCountEl.textContent = searchMatches.length ? `0/${searchMatches.length}` : '0/0';
+  if (selectFirst && searchMatches.length) focusSearchMatch(0);
+}
+
+function openSearch() {
+  viewerSearchEl.hidden = false;
+  viewerSearchInputEl.focus();
+  viewerSearchInputEl.select();
+  updateSearchMatches(false);
+}
+
+function closeSearch() {
+  viewerSearchEl.hidden = true;
+  viewerSearchInputEl.value = '';
+  clearSearchMatches();
+  document.querySelector('.note.selected, section.selected')?.focus({ preventScroll: true });
+}
+
+function showKeyboardReference() {
+  showModal({
+    title: 'Keyboard shortcuts',
+    message: 'SELECT\nJ / K  Previous / next note\nH / L  Previous / next section\n\nSELECTED NOTE\nA  Add image\nF  Feed now\nR  Requeue submitted note\nDelete  Delete note\nEnter  Edit note\nY  Copy note\n\nSELECTED SECTION\nA  Add note\nQ  Add to feed queue\nF  Feed now\nR  Rename\nC  Clear\nDelete  Delete section\n\nGLOBAL\n/  Search headings and notes\nI  Import Markdown bucket\nX  Export current bucket\n?  Open this reference\nEsc  Close search or dialog',
+    confirmLabel: 'Close'
+  });
+}
+
+viewerSearchInputEl.addEventListener('input', () => updateSearchMatches(true));
+viewerSearchInputEl.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeSearch();
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    if (!searchMatches.length) updateSearchMatches(false);
+    const next = searchIndex < 0 ? (event.shiftKey ? -1 : 0)
+      : searchIndex + (event.shiftKey ? -1 : 1);
+    focusSearchMatch(next);
+  }
+});
+viewerSearchCloseEl.addEventListener('click', closeSearch);
+
+function eventTargetsTextEntry(event) {
+  return event.composedPath().some(target =>
+    target?.matches?.('input, textarea, select, [contenteditable="true"]')
+  );
+}
+
+function recoverSearchFocus(event) {
+  if (event.key === 'Escape') {
+    closeSearch();
+    return true;
+  }
+  if (event.key.length !== 1) return false;
+  viewerSearchInputEl.focus();
+  const start = viewerSearchInputEl.selectionStart ?? viewerSearchInputEl.value.length;
+  const end = viewerSearchInputEl.selectionEnd ?? start;
+  viewerSearchInputEl.setRangeText(event.key, start, end, 'end');
+  updateSearchMatches(true);
+  return true;
+}
+
 function sectionElement(section) {
   const sectionEl = document.createElement('section');
   sectionEl.dataset.sectionId = section.id;
+  sectionEl.tabIndex = section.id === selectedSectionId ? 0 : -1;
+  if (section.id === selectedSectionId) sectionEl.classList.add('selected');
   sectionEl.classList.toggle('feed-current', Boolean(section.feedActive));
   sectionEl.classList.toggle('feed-queued', section.feedQueuePosition >= 0 && !section.feedActive);
   const headingRow = document.createElement('div');
@@ -698,8 +926,10 @@ function sectionElement(section) {
   const queueSection = document.createElement('button');
   queueSection.className = `section-action queue-add${section.feedQueuePosition >= 0 ? ' active' : ''}`;
   queueSection.type = 'button';
+  queueSection.dataset.viewerAction = 'queue';
   queueSection.title = section.feedCurrent ? 'This section is currently feeding'
-    : (section.feedQueuePosition >= 0 ? `Queued at position ${section.feedQueuePosition + 1}` : 'Add section to feed queue');
+    : (section.feedQueuePosition >= 0 ? `Queued at position ${section.feedQueuePosition + 1}` : 'Add section to feed queue (Q)');
+  queueSection.setAttribute('aria-keyshortcuts', 'Q');
   queueSection.disabled = section.feedCurrent || section.feedQueuePosition >= 0;
   queueSection.textContent = '+';
   queueSection.onclick = async () => {
@@ -714,7 +944,9 @@ function sectionElement(section) {
   const feedSectionNow = document.createElement('button');
   feedSectionNow.className = `section-action feed-now${section.feedCurrent ? ' active' : ''}`;
   feedSectionNow.type = 'button';
-  feedSectionNow.title = section.feedCurrent ? 'This section is currently feeding' : 'Switch the feed to this section now';
+  feedSectionNow.dataset.viewerAction = 'feed';
+  feedSectionNow.title = section.feedCurrent ? 'This section is currently feeding' : 'Switch the feed to this section now (F)';
+  feedSectionNow.setAttribute('aria-keyshortcuts', 'F');
   feedSectionNow.disabled = section.feedCurrent;
   const sectionBolt = document.createElement('span');
   sectionBolt.className = 'bolt-icon';
@@ -734,7 +966,9 @@ function sectionElement(section) {
   const renameSection = document.createElement('button');
   renameSection.className = 'section-action';
   renameSection.type = 'button';
-  renameSection.title = 'Rename section';
+  renameSection.dataset.viewerAction = 'rename';
+  renameSection.title = 'Rename section (R)';
+  renameSection.setAttribute('aria-keyshortcuts', 'R');
   renameSection.textContent = '✎';
   renameSection.onclick = async () => {
     const name = await requestText({
@@ -752,57 +986,68 @@ function sectionElement(section) {
   const clearSection = document.createElement('button');
   clearSection.className = 'section-action clear';
   clearSection.type = 'button';
+  clearSection.dataset.viewerAction = 'clear';
   clearSection.title = section.notes.length
-    ? 'Clear section; permanently delete all notes and managed attachments'
+    ? 'Clear all notes from this section (C)'
     : 'Section is already empty';
+  clearSection.setAttribute('aria-keyshortcuts', 'C');
   clearSection.textContent = '⌫';
   clearSection.disabled = section.notes.length === 0;
   clearSection.setAttribute('aria-label', clearSection.title);
   clearSection.onclick = async () => {
-    const confirmation = await requestText({
-      title: `Clear ${section.name}?`,
-      message: `This permanently deletes ${section.notes.length} notes and their managed image attachments, while keeping the section. Type “${section.name}” to confirm. This cannot be undone.`,
-      confirmLabel: 'Clear section', danger: true, maxLength: 50
-    });
-    if (confirmation === null) return;
-    if (confirmation !== section.name) {
-      setStatus('Section name did not match. Nothing was deleted.', true);
-      return;
+    let notesMode = 'discard';
+    if (section.systemKind !== 'unsorted') {
+      const choice = await showModal({
+        title: `Clear ${section.name}`,
+        message: `${section.notes.length} notes`,
+        confirmLabel: 'Move to Unsorted',
+        secondaryLabel: 'Delete all notes'
+      });
+      if (choice === null) return;
+      notesMode = choice === 'secondary' ? 'discard' : 'move';
     }
     try {
       const result = await request('/api/section/clear', {
-        method: 'POST', body: JSON.stringify({ id: section.id, confirmation: section.id })
+        method: 'POST', body: JSON.stringify({ id: section.id, notes: notesMode })
       });
       await load();
-      showToast(`Cleared ${result.deletedNotes} notes from ${section.name}`);
+      showToast(notesMode === 'move'
+        ? `Moved ${result.movedNotes} notes to Unsorted`
+        : `Deleted ${result.deletedNotes} notes`);
     } catch (error) { setStatus(error.message, true); }
   };
-  const deleteSection = document.createElement('button');
-  deleteSection.className = 'section-action delete';
-  deleteSection.type = 'button';
-  deleteSection.title = section.systemKind === 'unsorted'
-    ? 'Fallback section cannot be deleted' : 'Delete section; move notes to Unsorted';
-  deleteSection.textContent = '×';
-  deleteSection.disabled = section.systemKind === 'unsorted';
-  deleteSection.onclick = async () => {
-    const choice = await showModal({
-      title: `Delete ${section.name}?`,
-      message: `${section.notes.length} messages are in this section. Move them to the fallback section, or permanently delete them with the section.`,
-      confirmLabel: 'Move messages and delete',
-      secondaryLabel: 'Delete messages and section'
-    });
-    if (choice === null) return;
-    try {
-      await request('/api/section/delete', {
-        method: 'POST', body: JSON.stringify({
-          id: section.id, notes: choice === 'secondary' ? 'discard' : 'move'
-        })
+  sectionActions.append(queueSection, feedSectionNow, renameSection, clearSection);
+  if (section.systemKind !== 'unsorted') {
+    const deleteSection = document.createElement('button');
+    deleteSection.className = 'section-action delete';
+    deleteSection.type = 'button';
+    deleteSection.dataset.viewerAction = 'delete';
+    deleteSection.title = 'Delete section (Delete); move notes to Unsorted';
+    deleteSection.setAttribute('aria-keyshortcuts', 'Delete');
+    deleteSection.textContent = '×';
+    deleteSection.onclick = async () => {
+      const choice = await showModal({
+        title: `Delete ${section.name}?`,
+        message: `${section.notes.length} messages are in this section. Move them to the fallback section, or permanently delete them with the section.`,
+        confirmLabel: 'Move messages and delete',
+        secondaryLabel: 'Delete messages and section'
       });
-      await load();
-    } catch (error) { setStatus(error.message, true); }
-  };
-  sectionActions.append(queueSection, feedSectionNow, renameSection, clearSection, deleteSection);
+      if (choice === null) return;
+      try {
+        await request('/api/section/delete', {
+          method: 'POST', body: JSON.stringify({
+            id: section.id, notes: choice === 'secondary' ? 'discard' : 'move'
+          })
+        });
+        await load();
+      } catch (error) { setStatus(error.message, true); }
+    };
+    sectionActions.append(deleteSection);
+  }
   headingRow.append(sectionHandle, heading, feedLabel, sectionActions);
+  headingRow.addEventListener('click', event => {
+    if (!event.target.closest('button')) selectSection(sectionEl, false);
+  });
   const notes = document.createElement('div');
   notes.className = 'notes';
   notes.dataset.sectionId = section.id;
@@ -893,6 +1138,9 @@ function sectionElement(section) {
   const add = document.createElement('button');
   add.className = 'add';
   add.type = 'button';
+  add.dataset.viewerAction = 'add';
+  add.title = 'Add note (A)';
+  add.setAttribute('aria-keyshortcuts', 'A');
   add.textContent = '+ Add Note';
   add.addEventListener('click', async () => {
     try {
@@ -1036,17 +1284,44 @@ async function load() {
     documentEl.replaceChildren(addSectionControl(), ...data.sections.map(sectionElement));
     updateActiveNotes();
     restoreEditing(draft);
+    if (!viewerSearchEl.hidden) updateSearchMatches(false);
     setStatus('Live');
   } catch (error) {
     setStatus(error.message, true);
   }
 }
 
+window.addEventListener('keydown', event => {
+  if (event.ctrlKey || event.altKey || event.metaKey || editing
+      || isModalOpen() || isRoutingOpen()) return;
+  if (!viewerSearchEl.hidden) {
+    if (eventTargetsTextEntry(event)) return;
+    if (!recoverSearchFocus(event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+  if (eventTargetsTextEntry(event)) return;
+  const key = event.key.toLowerCase();
+  let handled = false;
+  if (['j', 'k'].includes(key)) handled = navigateNotes(key === 'j' ? 1 : -1);
+  else if (['h', 'l'].includes(key)) handled = navigateSections(key === 'l' ? 1 : -1);
+  else if (event.key === '/') {
+    openSearch();
+    handled = true;
+  } else if (event.key === '?') {
+    showKeyboardReference();
+    handled = true;
+  } else handled = triggerSelectedAction(key);
+  if (!handled) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+
 document.addEventListener('keydown', event => {
   if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey
       || editing || isModalOpen() || isRoutingOpen()) return;
-  const active = document.activeElement;
-  if (active?.matches('input, textarea, select, [contenteditable="true"]')) return;
+  if (!viewerSearchEl.hidden || eventTargetsTextEntry(event)) return;
   if (event.key === 'i' || event.key === 'I') {
     event.preventDefault();
     importBucket();

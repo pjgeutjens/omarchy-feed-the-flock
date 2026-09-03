@@ -8,6 +8,13 @@ trap '[[ -z $server ]] || kill "$server" 2>/dev/null || true; rm -rf "$tmp"' EXI
 export AGENT_FEED_STATE_DIR="$tmp/state" AGENT_FEED_EXPORT_DIR="$tmp/exports"
 export AGENT_FEED_WORKSPACE_PORT=47832
 export AGENT_FEED_DISABLE_WORKER=1 AGENT_FEED_HERDR="$tmp/herdr"
+export FAKE_WEBAPP_LOG="$tmp/webapp.log"
+export PATH="$tmp:$PATH"
+cat >"$tmp/omarchy-launch-webapp" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$FAKE_WEBAPP_LOG"
+EOF
+chmod +x "$tmp/omarchy-launch-webapp"
 cat >"$tmp/herdr" <<'EOF'
 #!/usr/bin/env bash
 if [[ ${1:-} == api && ${2:-} == snapshot ]]; then
@@ -43,6 +50,14 @@ for _ in {1..30}; do
   curl -fsS http://127.0.0.1:47832/js/app.js >/dev/null 2>&1 && break
   sleep 0.1
 done
+
+"$cli" bucket workspace inbox >/dev/null
+grep -Fxq 'http://127.0.0.1:47832/?bucket=inbox' "$FAKE_WEBAPP_LOG"
+grep -Fxq -- "--user-data-dir=$AGENT_FEED_STATE_DIR/workspace-browser" "$FAKE_WEBAPP_LOG"
+grep -Fxq -- '--disable-extensions' "$FAKE_WEBAPP_LOG"
+grep -Fxq -- '--no-first-run' "$FAKE_WEBAPP_LOG"
+grep -Fxq -- '--no-default-browser-check' "$FAKE_WEBAPP_LOG"
+[[ $(stat -c '%a' "$AGENT_FEED_STATE_DIR/workspace-browser") == 700 ]]
 
 # Event streams and ordinary API requests must release every SQLite descriptor.
 baseline_fds=$(find "/proc/$server/fd" -maxdepth 1 -type l | wc -l)
@@ -106,6 +121,19 @@ curl -fsS http://127.0.0.1:47832/api/targets \
     and ([.targets[].id] | index("clipboard")) == null
     and ([.targets[].kind] | all(. == "herdr"))' >/dev/null
 curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="routing-card"'
+curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="reset-all"'
+curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="viewer-search-input"'
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "request('/api/notes/reset-all'"
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "['j', 'k'].includes(key)"
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "['h', 'l'].includes(key)"
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'function triggerSelectedAction(key)'
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'"
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'event.stopImmediatePropagation();'
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "event.key === '/'"
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "event.key === '?'"
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'if (!viewerSearchEl.hidden)'
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'function recoverSearchFocus(event)'
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'viewerSearchInputEl.setRangeText(event.key'
 curl -fsS http://127.0.0.1:47832/js/routing.js | grep -Fq "request('/api/routing'"
 
 routing=$(curl -fsS -X POST -H 'Content-Type: application/json' \
@@ -152,6 +180,10 @@ jq -e '.activeBucketId == "ideas" and .feedBucketId == "inbox"
   --data '{"targetId":"herdr:w1:p2","deliveryMode":"idle-active-next","queueOrder":"fifo"}' \
   http://127.0.0.1:47832/api/routing) == 400 ]]
 grep -Fq 'stop the feed' "$tmp/active-routing.json"
+[[ $(curl -sS -o "$tmp/active-reset.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' --data '{}' \
+  http://127.0.0.1:47832/api/notes/reset-all) == 400 ]]
+grep -Fq 'stop the feed' "$tmp/active-reset.json"
 jq -e '.deliveryMode == "idle-all-batch" and .queueOrder == "lifo" and .feedEnabled == true' \
   <<<"$("$cli" state)" >/dev/null
 curl -fsS -X POST -H 'Content-Type: application/json' \
@@ -166,33 +198,57 @@ saved_export=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data '{"id":"inbox"}' http://127.0.0.1:47832/api/bucket/export)
 jq -e --arg path "$tmp/exports/Inbox.md" '.path == $path' <<<"$saved_export" >/dev/null
 grep -Fq -- '- [ ] Viewer feed control test' "$tmp/exports/Inbox.md"
-import_payload=$(jq -n --arg markdown $'# Imported Viewer\n\n## Queue\n\n- [ ] Pending import\n- [x] Submitted import\n' \
+import_payload=$(jq -n --arg markdown $'# Imported Viewer\n\n## Intake\n\n## Queue\n\n- [ ] Pending import\n- [x] Submitted import\n' \
   '{markdown: $markdown}')
 imported=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data "$import_payload" http://127.0.0.1:47832/api/bucket/import)
 jq -e '.id == "imported-viewer" and .noteCount == 2' <<<"$imported" >/dev/null
 imported_document=$(curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer')
 jq -e '.name == "Imported Viewer" and .noteCount == 2 and .submittedCount == 1
-  and .sections[0].name == "Queue"' <<<"$imported_document" >/dev/null
-clear_section_id=$(jq -r '.sections[0].id' <<<"$imported_document")
-[[ $(curl -sS -o "$tmp/clear-unconfirmed.json" -w '%{http_code}' -X POST \
+  and .sections[0].name == "Intake" and .sections[0].systemKind == "unsorted"
+  and .sections[1].name == "Queue" and .sections[1].systemKind == ""' \
+  <<<"$imported_document" >/dev/null
+reset_result=$(curl -fsS -X POST -H 'Content-Type: application/json' --data '{}' \
+  http://127.0.0.1:47832/api/notes/reset-all)
+jq -e '.ok == true and .resetCount >= 1' <<<"$reset_result" >/dev/null
+curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer' \
+  | jq -e '.noteCount == 2 and .submittedCount == 0 and .queuedCount == 2' >/dev/null
+sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+  "SELECT COUNT(*) FROM feed_queue WHERE delivered_at IS NOT NULL OR delivery_kind IS NOT NULL OR delivery_sequence IS NOT NULL" \
+  | grep -Fxq 0
+clear_section_id=$(jq -r '.sections[] | select(.name == "Queue") | .id' <<<"$imported_document")
+[[ $(curl -sS -o "$tmp/clear-invalid.json" -w '%{http_code}' -X POST \
   -H 'Content-Type: application/json' \
   --data "$(jq -n --arg id "$clear_section_id" '{id: $id}')" \
   http://127.0.0.1:47832/api/section/clear) == 400 ]]
-grep -Fq 'explicit section-clear confirmation does not match' "$tmp/clear-unconfirmed.json"
-[[ $(curl -sS -o "$tmp/clear-mismatch.json" -w '%{http_code}' -X POST \
-  -H 'Content-Type: application/json' \
-  --data "$(jq -n --arg id "$clear_section_id" '{id: $id, confirmation: "wrong"}')" \
-  http://127.0.0.1:47832/api/section/clear) == 400 ]]
+grep -Fq 'invalid section note handling' "$tmp/clear-invalid.json"
 jq -e '.noteCount == 2' \
   <<<"$(curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer')" >/dev/null
-cleared=$(curl -fsS -X POST -H 'Content-Type: application/json' \
-  --data "$(jq -n --arg id "$clear_section_id" '{id: $id, confirmation: $id}')" \
+moved=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$clear_section_id" '{id: $id, notes: "move"}')" \
   http://127.0.0.1:47832/api/section/clear)
 jq -e --arg id "$clear_section_id" \
-  '.ok == true and .sectionId == $id and .deletedNotes == 2' <<<"$cleared" >/dev/null
+  '.ok == true and .sectionId == $id and .mode == "move"
+   and .movedNotes == 2 and .deletedNotes == 0' <<<"$moved" >/dev/null
+moved_document=$(curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer')
+jq -e --arg id "$clear_section_id" '
+  .noteCount == 2
+  and ([.sections[] | select(.id == $id) | .notes | length] == [0])
+  and ([.sections[] | select(.systemKind == "unsorted") | .notes | length] == [2])
+' <<<"$moved_document" >/dev/null
+unsorted_id=$(jq -r '.sections[] | select(.systemKind == "unsorted") | .id' <<<"$moved_document")
+cleared=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$unsorted_id" '{id: $id, notes: "discard"}')" \
+  http://127.0.0.1:47832/api/section/clear)
+jq -e --arg id "$unsorted_id" \
+  '.ok == true and .sectionId == $id and .mode == "discard"
+   and .deletedNotes == 2' <<<"$cleared" >/dev/null
 curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer' \
   | jq -e --arg id "$clear_section_id" \
-    '.noteCount == 0 and .sections[0].id == $id and .sections[0].notes == []' >/dev/null
-curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'Type “${section.name}” to confirm'
+    '.noteCount == 0 and ([.sections[] | select(.id == $id) | .notes] == [[]])' >/dev/null
+curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "confirmLabel: 'Move to Unsorted'"
+if curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq 'Type “${section.name}” to confirm'; then
+  echo 'workspace still uses typed-title section clearing' >&2
+  exit 1
+fi
 curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "request('/api/section/clear'"

@@ -17,6 +17,8 @@
     <div class="title-row">
       <h1 id="title">Loading…</h1>
       <div class="bucket-management" aria-label="Import and export bucket">
+        <button class="bucket-action bucket-transfer" id="reset-all"
+          title="Mark every note in every bucket as unsent">Reset all</button>
         <button class="bucket-action bucket-transfer" id="bucket-import" title="Import Markdown bucket (I)">Import</button>
         <button class="bucket-action bucket-transfer" id="bucket-export" title="Export bucket as Markdown (X)">Export</button>
       </div>
@@ -48,8 +50,14 @@
       <div id="feed-queue-list" class="feed-queue-list" aria-live="polite"></div>
     </div>
   </div>
+  <div id="viewer-search" class="viewer-search" role="search" hidden>
+    <input id="viewer-search-input" type="search" autocomplete="off"
+      placeholder="Search headings and notes" aria-label="Search headings and notes">
+    <span id="viewer-search-count" class="viewer-search-count" aria-live="polite">0/0</span>
+    <button id="viewer-search-close" type="button" title="Close search (Escape)" aria-label="Close search">×</button>
+  </div>
   <div class="workspace-meta">
-    <div class="instructions">Left-click to copy · Right-click to edit · Enter saves · Shift+Enter adds a line · Esc undoes · Drag <strong>⠿</strong> to move</div>
+    <div class="instructions">J/K notes · H/L sections · action keys in ? · / search · Left-click to copy · Right-click to edit · Enter saves · Shift+Enter adds a line · Esc undoes · Drag <strong>⠿</strong> to move</div>
     <div id="status" aria-live="polite">Opening live document…</div>
   </div>
   <main id="document"></main>

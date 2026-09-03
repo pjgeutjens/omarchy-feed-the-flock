@@ -61,6 +61,34 @@ done
   echo "bin/feed-the-flock must remain a thin entry point" >&2
   exit 1
 }
+grep -Fq 'id="reset-all"' "$plugin_dir/workspace/index.html"
+grep -Fq 'id="viewer-search-input"' "$plugin_dir/workspace/index.html"
+grep -Fq "request('/api/notes/reset-all'" "$plugin_dir/workspace/js/app.js"
+grep -Fq 'WORKSPACE_BROWSER_DIR = STATE_DIR / "workspace-browser"' \
+  "$plugin_dir/bin/feed_the_flock/common.py"
+grep -Fq '"--disable-extensions", "--no-first-run", "--no-default-browser-check"' \
+  "$plugin_dir/bin/feed_the_flock/workspace.py"
+grep -Fq "event.stopImmediatePropagation();" "$plugin_dir/workspace/js/app.js"
+grep -Fq "['j', 'k'].includes(key)" "$plugin_dir/workspace/js/app.js"
+grep -Fq "['h', 'l'].includes(key)" "$plugin_dir/workspace/js/app.js"
+grep -Fq "function triggerSelectedAction(key)" "$plugin_dir/workspace/js/app.js"
+grep -Fq "a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'" \
+  "$plugin_dir/workspace/js/app.js"
+grep -Fq "event.key === '/'" "$plugin_dir/workspace/js/app.js"
+grep -Fq "event.key === '?'" "$plugin_dir/workspace/js/app.js"
+grep -Fq "if (!viewerSearchEl.hidden)" "$plugin_dir/workspace/js/app.js"
+grep -Fq "function recoverSearchFocus(event)" "$plugin_dir/workspace/js/app.js"
+grep -Fq "viewerSearchInputEl.setRangeText(event.key" "$plugin_dir/workspace/js/app.js"
+grep -Fq "confirmLabel: 'Move to Unsorted'" "$plugin_dir/workspace/js/app.js"
+if grep -Fq 'Type “${section.name}” to confirm' "$plugin_dir/workspace/js/app.js"; then
+  echo "section clearing still uses typed-title confirmation" >&2
+  exit 1
+fi
+if grep -Fq "deleteSection.disabled = section.systemKind === 'unsorted'" \
+    "$plugin_dir/workspace/js/app.js"; then
+  echo "fallback section still renders an impossible delete action" >&2
+  exit 1
+fi
 grep -Fq 'text: "Configure keybindings"' "$plugin_dir/BindingsOverlay.qml"
 grep -Fq 'Original preserved:' "$plugin_dir/BindingsOverlay.qml"
 grep -Fq 'text: "Source: " + String(modelData.source || "Unknown")' "$plugin_dir/BindingsOverlay.qml"
