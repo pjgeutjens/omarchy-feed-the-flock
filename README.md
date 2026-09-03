@@ -12,7 +12,7 @@ omarchy plugin add https://github.com/pjgeutjens/omarchy-feed-the-flock.git --en
 
 Feed the Flock uses commands included with a current Omarchy Quattro installation. It can turn a capture from Omarchy's optional Dictation app (Voxtype) into a note; Dictation itself is separate. Typed notes and delivery work without it.
 
-The plugin appears on the right side of the bar. Start Herdr, open Feed the Flock, and choose an agent under **Target**.
+Start Herdr, open Feed the Flock, and choose an agent under **Target**.
 
 ## Use it
 
