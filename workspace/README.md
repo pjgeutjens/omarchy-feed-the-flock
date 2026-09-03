@@ -45,18 +45,11 @@ Browser state is disposable. The database, managed attachments, logs, and Chromi
 - Note text and names are untrusted plain text. Do not insert them with `innerHTML`.
 - Attachment paths must remain inside the managed attachment directory.
 
-## Installation and customization
+## Customization
 
 End-user installations are Git checkouts. Custom viewer files therefore belong under `~/.config/feed-the-flock/workspace`, outside the plugin directory. When that directory contains `index.html`, the server loads the whole custom workspace from there. Plugin updates cannot write to it.
 
-The development installer also protects edits made inside its installed workspace. `scripts/install-workspace.py` records hashes in `~/.local/state/feed-the-flock/workspace-assets.json`. On a later development install:
-
-- unchanged built-in files receive the new release;
-- edited built-in files remain in place and get a neighboring `.upstream` copy;
-- user-created files remain untouched;
-- files removed from the release are deleted only when the installed copy is unchanged.
-
-Do not replace this installer with a directory-wide copy or cleanup. Do not make the normal plugin updater write into `~/.config/feed-the-flock`. `tests/test-workspace-install.sh` enforces the selection and preservation rules.
+Do not make the normal plugin updater write into `~/.config/feed-the-flock`.
 
 ## Checks
 

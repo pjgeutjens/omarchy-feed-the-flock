@@ -32,8 +32,7 @@ qmllint -I "$OMARCHY_PATH/shell" \
   "$plugin_dir/Panel.qml"
 python3 -m py_compile \
   "$plugin_dir/bin/feed-the-flock" \
-  "$plugin_dir/bin/feed_the_flock/"*.py \
-  "$plugin_dir/scripts/install-workspace.py"
+  "$plugin_dir/bin/feed_the_flock/"*.py
 for module in "$plugin_dir/workspace/js/"*.js; do
   node --check "$module"
 done
@@ -168,7 +167,6 @@ bash -n "$plugin_dir/scripts/manage-binding.sh" "$plugin_dir/scripts/prepare-rem
 "$plugin_dir/tests/test-clear-section.sh"
 "$plugin_dir/tests/test-bindings.sh"
 "$plugin_dir/tests/test-safety.sh"
-"$plugin_dir/tests/test-workspace-install.sh"
 "$plugin_dir/tests/test-attachments.sh"
 "$plugin_dir/tests/test-workspace.sh"
 PYTHONPATH="$plugin_dir/bin" python3 "$plugin_dir/tests/test-feed-notifications.py"

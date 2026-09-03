@@ -22,14 +22,6 @@ Run the validation suite from the repository root:
 
 It checks the manifest, QML, Python and JavaScript syntax, plugin boundaries, command behavior, local workspace, attachments, safety cases, and QML presentation tests.
 
-Install the working tree into the local Omarchy plugin directory with:
-
-```sh
-./scripts/install-local.sh
-```
-
-That script validates first, copies the plugin, rescans the shell, and enables the bar widget when needed. It is only for a separate development checkout; don't run it from the installed plugin directory.
-
 ## Change rules
 
 - Treat note text, imported Markdown, filenames, Herdr data, and persisted state as untrusted input.

@@ -24,6 +24,30 @@ fi
 EOF
 chmod +x "$tmp/herdr"
 cli="$root/bin/feed-the-flock"
+
+# Workspace selection is runtime behavior even though development sync tooling is not.
+config_dir="$tmp/config"
+mkdir -p "$config_dir/workspace"
+printf '%s\n' 'custom workspace' > "$config_dir/workspace/index.html"
+FEED_THE_FLOCK_CONFIG_DIR="$config_dir" PYTHONPATH="$root/bin" \
+  python3 - "$config_dir/workspace/index.html" <<'PY'
+import sys
+from pathlib import Path
+
+from feed_the_flock.common import WORKSPACE_HTML
+
+assert WORKSPACE_HTML == Path(sys.argv[1])
+PY
+FEED_THE_FLOCK_CONFIG_DIR="$tmp/empty-config" PYTHONPATH="$root/bin" \
+  python3 - "$root/workspace/index.html" <<'PY'
+import sys
+from pathlib import Path
+
+from feed_the_flock.common import WORKSPACE_HTML
+
+assert WORKSPACE_HTML == Path(sys.argv[1])
+PY
+
 mkdir -p "$FEED_THE_FLOCK_STATE_DIR"
 python3 - "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<'PY'
 import sqlite3
