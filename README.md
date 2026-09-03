@@ -1,6 +1,6 @@
 # Feed the Flock
 
-![Feed the Flock panel and workspace](preview.png)
+![Feed the Flock panel and workspace](preview.png?v=20260903)
 
 Feed the Flock is an Omarchy plugin for collecting prompts and sending them to Herdr agents when they are ready. Notes stay in a persistent queue, separate from the agent session you are viewing.
 
