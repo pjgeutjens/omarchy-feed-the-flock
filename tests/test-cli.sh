@@ -251,3 +251,19 @@ sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" \
 "$cli" feed start >/dev/null
 "$cli" _feed-worker
 jq -e '.feedEnabled == false' <<< "$("$cli" state)" >/dev/null
+
+for bucket_id in $("$cli" state | jq -r '.buckets[].id'); do
+  "$cli" bucket delete "$bucket_id"
+done
+"$cli" init
+jq -e '.activeBucketId == "" and .activeSectionId == ""
+  and .feedBucketId == "" and .feedSectionId == ""
+  and .feedEnabled == false and .buckets == [] and .sections == [] and .notes == []' \
+  <<< "$("$cli" state)" >/dev/null
+if "$cli" note add "No orphan note" >/dev/null 2>&1; then
+  echo "note was added without a bucket" >&2
+  exit 1
+fi
+"$cli" bucket add "Fresh Start"
+jq -e '.activeBucketId == "fresh-start" and (.buckets | length) == 1
+  and .activeSectionId == "fresh-start:unsorted"' <<< "$("$cli" state)" >/dev/null

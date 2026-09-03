@@ -195,12 +195,13 @@ def _open_connection() -> sqlite3.Connection:
     feed_bucket_id = db.execute(
         "SELECT value FROM settings WHERE key = 'feed_bucket'"
     ).fetchone()[0]
+    feed_section = db.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        (f"active_section:{feed_bucket_id}",),
+    ).fetchone()
     db.execute(
         "INSERT OR IGNORE INTO settings(key, value) VALUES ('feed_section', ?)",
-        (db.execute(
-            "SELECT value FROM settings WHERE key = ?",
-            (f"active_section:{feed_bucket_id}",),
-        ).fetchone()[0],),
+        (str(feed_section[0]) if feed_section else "",),
     )
     db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('feed_resume_after', '0')")
     db.commit()
@@ -293,10 +294,17 @@ def normalized_phase(db: sqlite3.Connection) -> str:
 def active_bucket(db: sqlite3.Connection) -> str:
     bucket_id = setting(db, "active_bucket", "inbox")
     exists = db.execute("SELECT 1 FROM buckets WHERE id = ?", (bucket_id,)).fetchone()
-    return bucket_id if exists else "inbox"
+    if exists:
+        return bucket_id
+    fallback = db.execute("SELECT id FROM buckets ORDER BY position, name LIMIT 1").fetchone()
+    return str(fallback[0]) if fallback else ""
 
 
 def active_section(db: sqlite3.Connection, bucket_id: str) -> str:
+    if not bucket_id or not db.execute(
+        "SELECT 1 FROM buckets WHERE id = ?", (bucket_id,)
+    ).fetchone():
+        return ""
     section_id = setting(db, f"active_section:{bucket_id}", unsorted_section_id(bucket_id))
     exists = db.execute(
         "SELECT 1 FROM sections WHERE id = ? AND bucket_id = ?", (section_id, bucket_id)
@@ -305,9 +313,12 @@ def active_section(db: sqlite3.Connection, bucket_id: str) -> str:
 
 
 def feed_destination(db: sqlite3.Connection) -> tuple[str, str]:
-    bucket_id = setting(db, "feed_bucket", active_bucket(db))
+    selected_bucket_id = active_bucket(db)
+    bucket_id = setting(db, "feed_bucket", selected_bucket_id)
     if not db.execute("SELECT 1 FROM buckets WHERE id = ?", (bucket_id,)).fetchone():
-        bucket_id = active_bucket(db)
+        bucket_id = selected_bucket_id
+    if not bucket_id:
+        return "", ""
     section_id = setting(db, "feed_section", active_section(db, bucket_id))
     if not db.execute(
         "SELECT 1 FROM sections WHERE id = ? AND bucket_id = ?", (section_id, bucket_id)
@@ -482,8 +493,8 @@ def state_command(_: argparse.Namespace) -> None:
                 "activeSectionId": selected_section,
                 "feedBucketId": feed_bucket_id,
                 "feedSectionId": feed_section_id,
-                "feedSectionName": feed_section_row["name"],
-                "feedBucketName": feed_section_row["bucket_name"],
+                "feedSectionName": feed_section_row["name"] if feed_section_row else "",
+                "feedBucketName": feed_section_row["bucket_name"] if feed_section_row else "",
                 "nextFeedBucketId": next_feed_bucket_id,
                 "nextFeedSectionId": next_feed_section_id,
                 "nextFeedBucketName": next_feed_row["bucket_name"] if next_feed_row else "",

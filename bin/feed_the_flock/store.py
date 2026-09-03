@@ -95,8 +95,6 @@ def move_bucket(args: argparse.Namespace) -> None:
 def delete_bucket(args: argparse.Namespace) -> None:
     with connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        if db.execute("SELECT COUNT(*) FROM buckets").fetchone()[0] <= 1:
-            raise ValueError("cannot delete the final bucket")
         if not db.execute("SELECT 1 FROM buckets WHERE id = ?", (args.bucket_id,)).fetchone():
             raise ValueError("bucket no longer exists")
         deleted_note_ids = [
@@ -117,11 +115,15 @@ def delete_bucket(args: argparse.Namespace) -> None:
         ordered = [row[0] for row in db.execute("SELECT id FROM buckets ORDER BY position, name")]
         for position, bucket_id in enumerate(ordered):
             db.execute("UPDATE buckets SET position = ? WHERE id = ?", (position, bucket_id))
+        next_bucket_id = ordered[0] if ordered else ""
         if setting(db, "active_bucket", "") == args.bucket_id:
-            set_setting(db, "active_bucket", ordered[0])
+            set_setting(db, "active_bucket", next_bucket_id)
         if setting(db, "feed_bucket", "") == args.bucket_id:
-            set_setting(db, "feed_bucket", ordered[0])
-            set_setting(db, "feed_section", active_section(db, ordered[0]))
+            set_setting(db, "feed_bucket", next_bucket_id)
+            set_setting(db, "feed_section", active_section(db, next_bucket_id))
+        if not ordered:
+            set_setting(db, "feed_enabled", "0")
+            set_setting(db, "feed_resume_after", "0")
         db.commit()
     unlink_attachment_files(attachment_paths)
 
@@ -447,9 +449,15 @@ def move_section(args: argparse.Namespace) -> None:
 
 def add_note_to_db(db: sqlite3.Connection, bucket_id: str, text: str, section_id: str | None = None) -> str:
     text = checked_note_text(text)
+    if not db.execute("SELECT 1 FROM buckets WHERE id = ?", (bucket_id,)).fetchone():
+        raise ValueError("create a bucket before adding notes")
     if db.execute("SELECT COUNT(*) FROM notes WHERE bucket_id = ?", (bucket_id,)).fetchone()[0] >= 2000:
         raise ValueError("at most 2,000 notes per bucket are supported")
     section_id = section_id or ensure_unsorted_section(db, bucket_id)
+    if not db.execute(
+        "SELECT 1 FROM sections WHERE id = ? AND bucket_id = ?", (section_id, bucket_id)
+    ).fetchone():
+        raise ValueError("target section does not exist in the bucket")
     position = db.execute(
         "SELECT COALESCE(MAX(position), -1) + 1 FROM notes WHERE section_id = ?", (section_id,)
     ).fetchone()[0]
