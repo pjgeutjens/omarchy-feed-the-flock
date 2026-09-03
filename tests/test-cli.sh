@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-export AGENT_FEED_STATE_DIR="$tmp/state" AGENT_FEED_EXPORT_DIR="$tmp/exports"
+export FEED_THE_FLOCK_STATE_DIR="$tmp/state" FEED_THE_FLOCK_EXPORT_DIR="$tmp/exports"
 cat >"$tmp/voxtype" <<'EOF'
 #!/usr/bin/env bash
 if [[ ${1:-} == status ]]; then
@@ -16,7 +16,7 @@ elif [[ ${1:-} == record && ${2:-} == start ]]; then
 fi
 EOF
 chmod +x "$tmp/voxtype"
-export AGENT_FEED_VOXTYPE="$tmp/voxtype"
+export FEED_THE_FLOCK_VOXTYPE="$tmp/voxtype"
 cat >"$tmp/herdr" <<'EOF'
 #!/usr/bin/env bash
 if [[ ${1:-} == api && ${2:-} == snapshot ]]; then
@@ -30,7 +30,7 @@ else
 fi
 EOF
 chmod +x "$tmp/herdr"
-export AGENT_FEED_HERDR="$tmp/herdr" FAKE_HERDR_LOG="$tmp/herdr.log" AGENT_FEED_DISABLE_WORKER=1 FAKE_HERDR_STATUS=idle
+export FEED_THE_FLOCK_HERDR="$tmp/herdr" FAKE_HERDR_LOG="$tmp/herdr.log" FEED_THE_FLOCK_DISABLE_WORKER=1 FAKE_HERDR_STATUS=idle
 cli="$root/bin/feed-the-flock"
 
 "$cli" init
@@ -44,7 +44,7 @@ if "$cli" target select clipboard >/dev/null 2>&1; then
   echo "clipboard was accepted as a delivery target" >&2
   exit 1
 fi
-python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+python3 - "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<'PY'
 import sqlite3
 import sys
 with sqlite3.connect(sys.argv[1]) as db:
@@ -130,9 +130,9 @@ jq -e --arg section "$interface_section" \
    and .notes[0].text == "Captured in selected section"' <<< "$state" >/dev/null
 "$cli" note delete "$(jq -r '.notes[0].id' <<< "$state")"
 
-cancelled_capture="$AGENT_FEED_STATE_DIR/captures/capture.cancel-test.txt"
+cancelled_capture="$FEED_THE_FLOCK_STATE_DIR/captures/capture.cancel-test.txt"
 printf 'Must not become a note' >"$cancelled_capture"
-python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" "$cancelled_capture" <<'PY'
+python3 - "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" "$cancelled_capture" <<'PY'
 import json
 import sqlite3
 import sys
@@ -193,7 +193,7 @@ export FAKE_HERDR_STATUS=working
 jq -e --arg id "$force_note" '.activeNoteIds == [$id]' <<< "$("$cli" targets)" >/dev/null
 jq -e --arg id "$force_note" '([.notes[].id] | index($id)) == null' \
   <<< "$("$cli" state)" >/dev/null
-[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+[[ $(sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" \
   "SELECT delivery_kind FROM feed_queue WHERE note_id = '$force_note'") == feed_now ]]
 export FAKE_HERDR_STATUS=idle
 jq -e '.activeNoteIds == []' <<< "$("$cli" targets)" >/dev/null
@@ -230,17 +230,17 @@ disposable_section=$("$cli" state | jq -r '.activeSectionId')
 "$cli" note add "Delete with section"
 disposable_note=$("$cli" state | jq -r '.notes[0].id')
 "$cli" section delete "$disposable_section" --notes discard
-[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+[[ $(sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" \
   "SELECT COUNT(*) FROM notes WHERE id = '$disposable_note'") == 0 ]]
 "$cli" bucket add "Temporary"
 "$cli" bucket delete temporary
 "$cli" seed-demo
 state=$("$cli" state)
-jq -e '.activeBucketId == "agent-feed"
+jq -e '.activeBucketId == "feed-the-flock"
   and (.sections | map(.name) | index("Organization") != null)
   and .totalCount >= 11' <<< "$state" >/dev/null
 
-sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" \
   "UPDATE feed_queue SET delivered_at = strftime('%s','now'), claim_token = NULL"
 "$cli" feed start >/dev/null
 "$cli" _feed-worker

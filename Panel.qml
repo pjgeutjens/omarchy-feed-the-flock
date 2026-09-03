@@ -3,12 +3,12 @@ import QtQuick.Controls
 import Quickshell
 import qs.Commons
 import qs.Ui
-import "." as AgentFeedCore
+import "." as FeedTheFlockCore
 
 Panel {
   id: root
-  moduleName: "io.github.pjgeutjens.agentfeed"
-  ipcTarget: "io.github.pjgeutjens.agentfeed"
+  moduleName: "io.github.pjgeutjens.feed-the-flock"
+  ipcTarget: "io.github.pjgeutjens.feed-the-flock"
   manageIpc: false
 
   property var anchorItem: null
@@ -27,43 +27,43 @@ Panel {
   function toggle() { if (root.opened) root.close(); else root.open() }
 
   function selectedBucketName() {
-    var buckets = AgentFeedCore.AgentFeedState.buckets
+    var buckets = FeedTheFlockCore.FeedTheFlockState.buckets
     for (var i = 0; i < buckets.length; i++)
-      if (buckets[i].id === AgentFeedCore.AgentFeedState.activeBucketId) return buckets[i].name
+      if (buckets[i].id === FeedTheFlockCore.FeedTheFlockState.activeBucketId) return buckets[i].name
     return ""
   }
 
   function selectedSectionName() {
-    var sections = AgentFeedCore.AgentFeedState.sections
+    var sections = FeedTheFlockCore.FeedTheFlockState.sections
     for (var i = 0; i < sections.length; i++)
-      if (sections[i].id === AgentFeedCore.AgentFeedState.activeSectionId) return sections[i].name
+      if (sections[i].id === FeedTheFlockCore.FeedTheFlockState.activeSectionId) return sections[i].name
     return "selected section"
   }
 
   function captureDestination() {
-    var bucket = AgentFeedCore.AgentFeedState.captureBucketName || root.selectedBucketName()
-    var section = AgentFeedCore.AgentFeedState.captureSectionName || root.selectedSectionName()
+    var bucket = FeedTheFlockCore.FeedTheFlockState.captureBucketName || root.selectedBucketName()
+    var section = FeedTheFlockCore.FeedTheFlockState.captureSectionName || root.selectedSectionName()
     return bucket + " / " + section
   }
 
   function cycleBucket(delta) {
-    var values = AgentFeedCore.AgentFeedState.buckets
-    if (values.length === 0 || AgentFeedCore.AgentFeedState.busy) return
+    var values = FeedTheFlockCore.FeedTheFlockState.buckets
+    if (values.length === 0 || FeedTheFlockCore.FeedTheFlockState.busy) return
     var index = 0
     for (var i = 0; i < values.length; i++)
-      if (values[i].id === AgentFeedCore.AgentFeedState.activeBucketId) index = i
+      if (values[i].id === FeedTheFlockCore.FeedTheFlockState.activeBucketId) index = i
     index = (index + delta + values.length) % values.length
-    AgentFeedCore.AgentFeedState.selectBucket(values[index].id)
+    FeedTheFlockCore.FeedTheFlockState.selectBucket(values[index].id)
   }
 
   function cycleSection(delta) {
-    var values = AgentFeedCore.AgentFeedState.sections
-    if (values.length === 0 || AgentFeedCore.AgentFeedState.busy) return
+    var values = FeedTheFlockCore.FeedTheFlockState.sections
+    if (values.length === 0 || FeedTheFlockCore.FeedTheFlockState.busy) return
     var index = 0
     for (var i = 0; i < values.length; i++)
-      if (values[i].id === AgentFeedCore.AgentFeedState.activeSectionId) index = i
+      if (values[i].id === FeedTheFlockCore.FeedTheFlockState.activeSectionId) index = i
     index = (index + delta + values.length) % values.length
-    AgentFeedCore.AgentFeedState.selectSection(values[index].id)
+    FeedTheFlockCore.FeedTheFlockState.selectSection(values[index].id)
   }
 
   function openDeliveryTargetPicker() {
@@ -79,8 +79,8 @@ Panel {
   }
 
   function toggleRecording() {
-    if (AgentFeedCore.AgentFeedState.recording) AgentFeedCore.AgentFeedState.stopRecording()
-    else if (!AgentFeedCore.AgentFeedState.processing) AgentFeedCore.AgentFeedState.startRecording()
+    if (FeedTheFlockCore.FeedTheFlockState.recording) FeedTheFlockCore.FeedTheFlockState.stopRecording()
+    else if (!FeedTheFlockCore.FeedTheFlockState.processing) FeedTheFlockCore.FeedTheFlockState.startRecording()
   }
 
   function openHelp() {
@@ -135,9 +135,9 @@ Panel {
   }
 
   onOpenedChanged: {
-    AgentFeedCore.AgentFeedState.panelOpen = root.opened
+    FeedTheFlockCore.FeedTheFlockState.panelOpen = root.opened
     if (root.opened) {
-      AgentFeedCore.AgentFeedState.refresh()
+      FeedTheFlockCore.FeedTheFlockState.refresh()
       Qt.callLater(function() { keyCatcher.forceActiveFocus() })
     } else {
       root.helpOpen = false
@@ -152,9 +152,9 @@ Panel {
   Component {
     id: feedIcon
     Text {
-      text: AgentFeedCore.AgentFeedState.recording ? "󰕽" : "󰆚"
+      text: FeedTheFlockCore.FeedTheFlockState.recording ? "󰕽" : "󰆚"
       textFormat: Text.PlainText
-      color: AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : root.contentForeground
+      color: FeedTheFlockCore.FeedTheFlockState.recording ? root.urgentForeground : root.contentForeground
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.display
     }
@@ -170,7 +170,7 @@ Panel {
     contentWidth: panel.fittedContentWidth(Style.space(650))
     contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(650))
 
-    AgentFeedKeyCatcher {
+    FeedTheFlockKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
       blocked: root.notesOpen || root.bindingsOpen || keybindingsOverlay.inputFocused
@@ -188,7 +188,7 @@ Panel {
       }
       onDeleteBucketRequested: {
         if (!root.helpOpen)
-          AgentFeedCore.AgentFeedState.deleteBucket(AgentFeedCore.AgentFeedState.activeBucketId)
+          FeedTheFlockCore.FeedTheFlockState.deleteBucket(FeedTheFlockCore.FeedTheFlockState.activeBucketId)
       }
       onTabRequested: function(direction) { if (!root.helpOpen) root.cycleSection(direction) }
       onTextKey: function(text) {
@@ -201,29 +201,29 @@ Panel {
         else if (text === "l" || text === "L") root.cycleBucket(1)
         else if (text === "r" || text === "R") root.toggleRecording()
         else if (text === "n" || text === "N") root.toggleNotes()
-        else if (text === "i" || text === "I") AgentFeedCore.AgentFeedState.importBucket()
-        else if (text === "x") AgentFeedCore.AgentFeedState.exportBucket(
-          AgentFeedCore.AgentFeedState.activeBucketId)
+        else if (text === "i" || text === "I") FeedTheFlockCore.FeedTheFlockState.importBucket()
+        else if (text === "x") FeedTheFlockCore.FeedTheFlockState.exportBucket(
+          FeedTheFlockCore.FeedTheFlockState.activeBucketId)
         else if (text === "b") bucketControls.beginCreate()
         else if (text === "B") bucketControls.beginRename()
         else if (text === "s") sectionControls.beginCreate()
         else if (text === "S") sectionControls.beginRename()
         else if (text === "[") sectionControls.moveActiveSectionOrder("left")
         else if (text === "]") sectionControls.moveActiveSectionOrder("right")
-        else if (text === "{") AgentFeedCore.AgentFeedState.moveBucket(
-          AgentFeedCore.AgentFeedState.activeBucketId, "left")
-        else if (text === "}") AgentFeedCore.AgentFeedState.moveBucket(
-          AgentFeedCore.AgentFeedState.activeBucketId, "right")
+        else if (text === "{") FeedTheFlockCore.FeedTheFlockState.moveBucket(
+          FeedTheFlockCore.FeedTheFlockState.activeBucketId, "left")
+        else if (text === "}") FeedTheFlockCore.FeedTheFlockState.moveBucket(
+          FeedTheFlockCore.FeedTheFlockState.activeBucketId, "right")
         else if (text === "?") root.toggleHelp()
         else if (text === "k" || text === "K") root.openBindings()
         else if (text === "q" || text === "Q") root.openQueueOrderPicker()
         else if (text === "m" || text === "M") root.openDeliveryModePicker()
-        else if (text === "f" || text === "F") AgentFeedCore.AgentFeedState.toggleFeed()
-        else if (text === "g") AgentFeedCore.AgentFeedState.addFeedSection(
-          AgentFeedCore.AgentFeedState.activeSectionId)
-        else if (text === "G") AgentFeedCore.AgentFeedState.selectFeedSectionNow(
-          AgentFeedCore.AgentFeedState.activeSectionId)
-        else if (text === "o" || text === "O") AgentFeedCore.AgentFeedState.openBucket()
+        else if (text === "f" || text === "F") FeedTheFlockCore.FeedTheFlockState.toggleFeed()
+        else if (text === "g") FeedTheFlockCore.FeedTheFlockState.addFeedSection(
+          FeedTheFlockCore.FeedTheFlockState.activeSectionId)
+        else if (text === "G") FeedTheFlockCore.FeedTheFlockState.selectFeedSectionNow(
+          FeedTheFlockCore.FeedTheFlockState.activeSectionId)
+        else if (text === "o" || text === "O") FeedTheFlockCore.FeedTheFlockState.openBucket()
         else if (text === "t" || text === "T") root.openDeliveryTargetPicker()
       }
 
@@ -245,16 +245,16 @@ Panel {
             width: parent.width
             iconComponent: feedIcon
             title: "Feed the Flock"
-            meta: AgentFeedCore.AgentFeedState.totalCount + " NOTES · CAPTURE AND DELIVERY"
+            meta: FeedTheFlockCore.FeedTheFlockState.totalCount + " NOTES · CAPTURE AND DELIVERY"
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
           }
 
           Text {
-            visible: AgentFeedCore.AgentFeedState.lastError !== "" || AgentFeedCore.AgentFeedState.error !== ""
+            visible: FeedTheFlockCore.FeedTheFlockState.lastError !== "" || FeedTheFlockCore.FeedTheFlockState.error !== ""
             width: parent.width
-            text: AgentFeedCore.AgentFeedState.lastError !== ""
-              ? AgentFeedCore.AgentFeedState.lastError : AgentFeedCore.AgentFeedState.error
+            text: FeedTheFlockCore.FeedTheFlockState.lastError !== ""
+              ? FeedTheFlockCore.FeedTheFlockState.lastError : FeedTheFlockCore.FeedTheFlockState.error
             textFormat: Text.PlainText
             color: root.urgentForeground
             font.family: root.contentFontFamily
@@ -286,21 +286,21 @@ Panel {
             spacing: Style.space(8)
             Button {
               id: recordButton
-              text: AgentFeedCore.AgentFeedState.recording ? "■  FINISH"
-                : (AgentFeedCore.AgentFeedState.processing ? "◐  TRANSCRIBING…" : "●  RECORD")
+              text: FeedTheFlockCore.FeedTheFlockState.recording ? "■  FINISH"
+                : (FeedTheFlockCore.FeedTheFlockState.processing ? "◐  TRANSCRIBING…" : "●  RECORD")
               bordered: true
-              foreground: AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : root.contentForeground
+              foreground: FeedTheFlockCore.FeedTheFlockState.recording ? root.urgentForeground : root.contentForeground
               fontFamily: root.contentFontFamily
               fontSize: Style.font.bodySmall
-              enabled: !AgentFeedCore.AgentFeedState.busy && !AgentFeedCore.AgentFeedState.processing
+              enabled: !FeedTheFlockCore.FeedTheFlockState.busy && !FeedTheFlockCore.FeedTheFlockState.processing
               onClicked: root.toggleRecording()
             }
             Text {
               width: parent.width - recordButton.width - cancelButton.width - parent.spacing * 2
               anchors.verticalCenter: parent.verticalCenter
-              text: AgentFeedCore.AgentFeedState.recording
+              text: FeedTheFlockCore.FeedTheFlockState.recording
                 ? "Speak now — capturing into " + root.captureDestination()
-                : (AgentFeedCore.AgentFeedState.processing
+                : (FeedTheFlockCore.FeedTheFlockState.processing
                   ? "Transcribing into " + root.captureDestination()
                   : "Shift+F9 captures into this bucket / section")
               textFormat: Text.PlainText
@@ -311,20 +311,20 @@ Panel {
             }
             Button {
               id: cancelButton
-              visible: AgentFeedCore.AgentFeedState.recording
+              visible: FeedTheFlockCore.FeedTheFlockState.recording
               text: "Cancel"
               bordered: true
               foreground: root.dimForeground
-              onClicked: AgentFeedCore.AgentFeedState.cancelRecording()
+              onClicked: FeedTheFlockCore.FeedTheFlockState.cancelRecording()
             }
           }
 
           BorderSurface {
-            visible: AgentFeedCore.AgentFeedState.recording || AgentFeedCore.AgentFeedState.processing
+            visible: FeedTheFlockCore.FeedTheFlockState.recording || FeedTheFlockCore.FeedTheFlockState.processing
             width: parent.width
             implicitHeight: captureStatus.implicitHeight + Style.space(18)
-            color: Util.alpha(AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : Color.accent, 0.06)
-            borderSpec: Border.flat(AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : Color.accent,
+            color: Util.alpha(FeedTheFlockCore.FeedTheFlockState.recording ? root.urgentForeground : Color.accent, 0.06)
+            borderSpec: Border.flat(FeedTheFlockCore.FeedTheFlockState.recording ? root.urgentForeground : Color.accent,
               Style.normalBorderWidth)
             radius: Style.cornerRadius
             opacity: visible ? 1 : 0
@@ -332,11 +332,11 @@ Panel {
             Text {
               id: captureStatus
               anchors.centerIn: parent
-              text: AgentFeedCore.AgentFeedState.recording
+              text: FeedTheFlockCore.FeedTheFlockState.recording
                 ? "●  RECORDING TO " + root.captureDestination().toUpperCase()
                 : "◐  TRANSCRIBING TO " + root.captureDestination().toUpperCase()
               textFormat: Text.PlainText
-              color: AgentFeedCore.AgentFeedState.recording ? root.urgentForeground : Color.accent
+              color: FeedTheFlockCore.FeedTheFlockState.recording ? root.urgentForeground : Color.accent
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.bodySmall
             }
@@ -351,7 +351,7 @@ Panel {
             foreground: Color.accent
             fontFamily: root.contentFontFamily
             fontSize: Style.font.bodySmall
-            onClicked: AgentFeedCore.AgentFeedState.openBucket()
+            onClicked: FeedTheFlockCore.FeedTheFlockState.openBucket()
           }
 
           PanelRoutingControls {
@@ -419,15 +419,15 @@ Panel {
         dimForeground: root.dimForeground
         fontFamily: root.contentFontFamily
         sectionName: root.selectedSectionName()
-        notes: AgentFeedCore.AgentFeedState.notes
-        busy: AgentFeedCore.AgentFeedState.busy
+        notes: FeedTheFlockCore.FeedTheFlockState.notes
+        busy: FeedTheFlockCore.FeedTheFlockState.busy
         onCloseRequested: root.closeNotes()
         onMoveRequested: function(noteId, direction) {
-          AgentFeedCore.AgentFeedState.moveNote(noteId, direction)
+          FeedTheFlockCore.FeedTheFlockState.moveNote(noteId, direction)
         }
         onWorkspaceRequested: {
           root.closeNotes()
-          AgentFeedCore.AgentFeedState.openBucket()
+          FeedTheFlockCore.FeedTheFlockState.openBucket()
         }
       }
 
@@ -439,8 +439,8 @@ Panel {
         foreground: root.contentForeground
         dimForeground: root.dimForeground
         fontFamily: root.contentFontFamily
-        recordBinding: AgentFeedCore.AgentFeedState.recordBinding
-        feedBinding: AgentFeedCore.AgentFeedState.feedBinding
+        recordBinding: FeedTheFlockCore.FeedTheFlockState.recordBinding
+        feedBinding: FeedTheFlockCore.FeedTheFlockState.feedBinding
         onCloseRequested: root.closeHelp()
       }
 
@@ -453,20 +453,20 @@ Panel {
         dimForeground: root.dimForeground
         urgentForeground: root.urgentForeground
         fontFamily: root.contentFontFamily
-        recordBinding: AgentFeedCore.AgentFeedState.recordBinding
-        feedBinding: AgentFeedCore.AgentFeedState.feedBinding
-        recordOverride: AgentFeedCore.AgentFeedState.recordBindingOverride
-        feedOverride: AgentFeedCore.AgentFeedState.feedBindingOverride
-        busy: AgentFeedCore.AgentFeedState.busy
+        recordBinding: FeedTheFlockCore.FeedTheFlockState.recordBinding
+        feedBinding: FeedTheFlockCore.FeedTheFlockState.feedBinding
+        recordOverride: FeedTheFlockCore.FeedTheFlockState.recordBindingOverride
+        feedOverride: FeedTheFlockCore.FeedTheFlockState.feedBindingOverride
+        busy: FeedTheFlockCore.FeedTheFlockState.busy
         onSetRequested: function(mode, shortcut, overrideExisting) {
-          AgentFeedCore.AgentFeedState.setBinding(mode, shortcut, overrideExisting)
+          FeedTheFlockCore.FeedTheFlockState.setBinding(mode, shortcut, overrideExisting)
         }
-        onClearRequested: function(mode) { AgentFeedCore.AgentFeedState.clearBinding(mode) }
+        onClearRequested: function(mode) { FeedTheFlockCore.FeedTheFlockState.clearBinding(mode) }
         onCloseRequested: root.closeBindings()
       }
 
       Connections {
-        target: AgentFeedCore.AgentFeedState
+        target: FeedTheFlockCore.FeedTheFlockState
         function onBindingApplied(mode, success) { bindingsOverlay.applied(success) }
         function onBindingConflict(mode, shortcut, actions) {
           bindingsOverlay.conflict(mode, shortcut, actions)

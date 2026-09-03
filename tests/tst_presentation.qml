@@ -1,9 +1,9 @@
 import QtQuick
 import QtTest
-import "../AgentFeedPresentation.js" as Presentation
+import "../FeedTheFlockPresentation.js" as Presentation
 
 TestCase {
-  name: "AgentFeedPresentation"
+  name: "FeedTheFlockPresentation"
 
   function test_icons() {
     compare(Presentation.icon("idle"), "󰆚")

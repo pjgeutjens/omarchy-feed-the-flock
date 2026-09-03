@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-export AGENT_FEED_STATE_DIR="$tmp/state" AGENT_FEED_HERDR="$tmp/herdr"
+export FEED_THE_FLOCK_STATE_DIR="$tmp/state" FEED_THE_FLOCK_HERDR="$tmp/herdr"
 export TRANSPORT_LOG="$tmp/transport.log"
 
 cat >"$tmp/herdr" <<'EOF'
@@ -31,12 +31,12 @@ cli="$root/bin/feed-the-flock"
 "$cli" init
 "$cli" note add 'Inspect both images'
 note_id=$("$cli" state | jq -r '.notes[0].id')
-mkdir -p "$AGENT_FEED_STATE_DIR/attachments"
-printf first >"$AGENT_FEED_STATE_DIR/attachments/first.png"
-printf second >"$AGENT_FEED_STATE_DIR/attachments/second.png"
-sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" <<SQL
-INSERT INTO attachments VALUES ('first', '$note_id', 'first.png', 'image/png', '$AGENT_FEED_STATE_DIR/attachments/first.png', 0, 1);
-INSERT INTO attachments VALUES ('second', '$note_id', 'second.png', 'image/png', '$AGENT_FEED_STATE_DIR/attachments/second.png', 1, 2);
+mkdir -p "$FEED_THE_FLOCK_STATE_DIR/attachments"
+printf first >"$FEED_THE_FLOCK_STATE_DIR/attachments/first.png"
+printf second >"$FEED_THE_FLOCK_STATE_DIR/attachments/second.png"
+sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<SQL
+INSERT INTO attachments VALUES ('first', '$note_id', 'first.png', 'image/png', '$FEED_THE_FLOCK_STATE_DIR/attachments/first.png', 0, 1);
+INSERT INTO attachments VALUES ('second', '$note_id', 'second.png', 'image/png', '$FEED_THE_FLOCK_STATE_DIR/attachments/second.png', 1, 2);
 SQL
 "$cli" target select herdr:w1:p2
 "$cli" deliver "$note_id" >/dev/null

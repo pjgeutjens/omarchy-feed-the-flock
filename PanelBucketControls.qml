@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui
-import "." as AgentFeedCore
+import "." as FeedTheFlockCore
 
 Column {
   id: root
@@ -17,9 +17,9 @@ Column {
   spacing: Style.space(8)
 
   function selectedBucketName() {
-    var buckets = AgentFeedCore.AgentFeedState.buckets
+    var buckets = FeedTheFlockCore.FeedTheFlockState.buckets
     for (var i = 0; i < buckets.length; i++)
-      if (buckets[i].id === AgentFeedCore.AgentFeedState.activeBucketId) return buckets[i].name
+      if (buckets[i].id === FeedTheFlockCore.FeedTheFlockState.activeBucketId) return buckets[i].name
     return ""
   }
 
@@ -35,7 +35,7 @@ Column {
   }
 
   function beginRename() {
-    root.editingBucketId = AgentFeedCore.AgentFeedState.activeBucketId
+    root.editingBucketId = FeedTheFlockCore.FeedTheFlockState.activeBucketId
     root.creating = true
     newBucketField.text = root.selectedBucketName()
     Qt.callLater(function() { newBucketField.forceActiveFocus(); newBucketField.selectAll() })
@@ -45,8 +45,8 @@ Column {
     var name = newBucketField.text.trim()
     if (name === "") return
     var accepted = root.editingBucketId !== ""
-      ? AgentFeedCore.AgentFeedState.renameBucket(root.editingBucketId, name)
-      : AgentFeedCore.AgentFeedState.createBucket(name)
+      ? FeedTheFlockCore.FeedTheFlockState.renameBucket(root.editingBucketId, name)
+      : FeedTheFlockCore.FeedTheFlockState.createBucket(name)
     if (accepted) {
       root.creating = false
       root.editingBucketId = ""
@@ -71,31 +71,31 @@ Column {
         tooltipText: "Move active bucket left"
         foreground: root.dimForeground
         fontFamily: "JetBrainsMono Nerd Font"
-        onClicked: AgentFeedCore.AgentFeedState.moveBucket(
-          AgentFeedCore.AgentFeedState.activeBucketId, "left")
+        onClicked: FeedTheFlockCore.FeedTheFlockState.moveBucket(
+          FeedTheFlockCore.FeedTheFlockState.activeBucketId, "left")
       }
       PanelActionButton {
         iconText: "󰅂" // nf-md-chevron_right
         tooltipText: "Move active bucket right"
         foreground: root.dimForeground
         fontFamily: "JetBrainsMono Nerd Font"
-        onClicked: AgentFeedCore.AgentFeedState.moveBucket(
-          AgentFeedCore.AgentFeedState.activeBucketId, "right")
+        onClicked: FeedTheFlockCore.FeedTheFlockState.moveBucket(
+          FeedTheFlockCore.FeedTheFlockState.activeBucketId, "right")
       }
       PanelActionButton {
         iconText: "󰋺" // nf-md-import
         tooltipText: "Import Markdown bucket (I)"
         foreground: root.dimForeground
         fontFamily: "JetBrainsMono Nerd Font"
-        onClicked: AgentFeedCore.AgentFeedState.importBucket()
+        onClicked: FeedTheFlockCore.FeedTheFlockState.importBucket()
       }
       PanelActionButton {
         iconText: "󰈇" // nf-md-export
         tooltipText: "Export active bucket to Downloads (X)"
         foreground: root.dimForeground
         fontFamily: "JetBrainsMono Nerd Font"
-        onClicked: AgentFeedCore.AgentFeedState.exportBucket(
-          AgentFeedCore.AgentFeedState.activeBucketId)
+        onClicked: FeedTheFlockCore.FeedTheFlockState.exportBucket(
+          FeedTheFlockCore.FeedTheFlockState.activeBucketId)
       }
       PanelActionButton {
         iconText: "󰏫" // nf-md-pencil
@@ -109,8 +109,8 @@ Column {
         tooltipText: "Delete active bucket"
         foreground: root.dimForeground
         fontFamily: "JetBrainsMono Nerd Font"
-        onClicked: AgentFeedCore.AgentFeedState.deleteBucket(
-          AgentFeedCore.AgentFeedState.activeBucketId)
+        onClicked: FeedTheFlockCore.FeedTheFlockState.deleteBucket(
+          FeedTheFlockCore.FeedTheFlockState.activeBucketId)
       }
     }
   }
@@ -119,18 +119,18 @@ Column {
     width: parent.width
     spacing: Style.space(6)
     Repeater {
-      model: AgentFeedCore.AgentFeedState.buckets
+      model: FeedTheFlockCore.FeedTheFlockState.buckets
       delegate: Button {
         required property var modelData
         text: modelData.name.toUpperCase() + "  " + modelData.messageCount + " MSG"
         bordered: true
-        foreground: modelData.id === AgentFeedCore.AgentFeedState.activeBucketId
+        foreground: modelData.id === FeedTheFlockCore.FeedTheFlockState.activeBucketId
           ? Color.accent : root.foreground
         fontFamily: root.fontFamily
         fontSize: Style.font.caption
         horizontalPadding: Style.space(8)
         verticalPadding: Style.space(4)
-        onClicked: AgentFeedCore.AgentFeedState.selectBucket(modelData.id)
+        onClicked: FeedTheFlockCore.FeedTheFlockState.selectBucket(modelData.id)
       }
     }
     Button {
@@ -169,7 +169,7 @@ Column {
       text: root.editingBucketId !== "" ? "Save" : "Create"
       bordered: true
       foreground: root.foreground
-      enabled: newBucketField.text.trim() !== "" && !AgentFeedCore.AgentFeedState.busy
+      enabled: newBucketField.text.trim() !== "" && !FeedTheFlockCore.FeedTheFlockState.busy
       onClicked: root.submit()
     }
   }

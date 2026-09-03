@@ -11,16 +11,20 @@ from typing import BinaryIO, Sequence
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT = PLUGIN_ROOT / "bin/feed-the-flock"
-STATE_DIR = Path(os.environ.get("AGENT_FEED_STATE_DIR", Path.home() / ".local/state/agent-feed"))
-DB_PATH = STATE_DIR / "agent-feed.db"
+STATE_DIR = Path(os.environ.get("FEED_THE_FLOCK_STATE_DIR", Path.home() / ".local/state/feed-the-flock"))
+CONFIG_DIR = Path(os.environ.get("FEED_THE_FLOCK_CONFIG_DIR", Path.home() / ".config/feed-the-flock"))
+DB_PATH = STATE_DIR / "feed-the-flock.db"
 CAPTURE_DIR = STATE_DIR / "captures"
 ATTACHMENT_DIR = STATE_DIR / "attachments"
-EXPORT_DIR = Path(os.environ.get("AGENT_FEED_EXPORT_DIR", Path.home() / "Downloads"))
+EXPORT_DIR = Path(os.environ.get("FEED_THE_FLOCK_EXPORT_DIR", Path.home() / "Downloads"))
 ATTACHMENT_CLIPBOARD_LOCK = STATE_DIR / "attachment-clipboard.lock"
 LOG_PATH = STATE_DIR / "finalizer.log"
 WORKSPACE_HOST = "127.0.0.1"
-WORKSPACE_PORT = int(os.environ.get("AGENT_FEED_WORKSPACE_PORT", "47731"))
-WORKSPACE_HTML = PLUGIN_ROOT / "workspace/index.html"
+WORKSPACE_PORT = int(os.environ.get("FEED_THE_FLOCK_WORKSPACE_PORT", "47731"))
+BUILTIN_WORKSPACE_DIR = PLUGIN_ROOT / "workspace"
+CUSTOM_WORKSPACE_DIR = CONFIG_DIR / "workspace"
+WORKSPACE_DIR = CUSTOM_WORKSPACE_DIR if (CUSTOM_WORKSPACE_DIR / "index.html").is_file() else BUILTIN_WORKSPACE_DIR
+WORKSPACE_HTML = WORKSPACE_DIR / "index.html"
 WORKSPACE_LOG = STATE_DIR / "workspace.log"
 WORKSPACE_BROWSER_DIR = STATE_DIR / "workspace-browser"
 FEED_LOG = STATE_DIR / "feed.log"
@@ -29,9 +33,9 @@ FEED_RESUME_LOCK = STATE_DIR / "feed-resume.lock"
 OMARCHY_THEME_NAME = Path.home() / ".local/state/omarchy/current/theme.name"
 OMARCHY_USER_THEMES = Path.home() / ".config/omarchy/themes"
 OMARCHY_SYSTEM_THEMES = Path("/usr/share/omarchy/themes")
-VOXTYPE = os.environ.get("AGENT_FEED_VOXTYPE", "voxtype")
-HERDR = os.environ.get("AGENT_FEED_HERDR", "herdr")
-DEFAULT_BUCKETS = (("inbox", "Inbox"), ("agent-feed", "Agent Feed"), ("ideas", "Ideas"))
+VOXTYPE = os.environ.get("FEED_THE_FLOCK_VOXTYPE", "voxtype")
+HERDR = os.environ.get("FEED_THE_FLOCK_HERDR", "herdr")
+DEFAULT_BUCKETS = (("inbox", "Inbox"), ("feed-the-flock", "Feed the Flock"), ("ideas", "Ideas"))
 MAX_LOG_BYTES = 1024 * 1024
 
 

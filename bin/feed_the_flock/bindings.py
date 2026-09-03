@@ -12,14 +12,14 @@ from pathlib import Path
 
 from .common import ENTRYPOINT, run_bounded
 
-HYPR_CONFIG_DIR = Path(os.environ.get("AGENT_FEED_HYPR_CONFIG_DIR", Path.home() / ".config/hypr"))
-BINDING_FILE = HYPR_CONFIG_DIR / "agent-feed-bindings.lua"
+HYPR_CONFIG_DIR = Path(os.environ.get("FEED_THE_FLOCK_HYPR_CONFIG_DIR", Path.home() / ".config/hypr"))
+BINDING_FILE = HYPR_CONFIG_DIR / "feed-the-flock-bindings.lua"
 USER_BINDINGS = HYPR_CONFIG_DIR / "bindings.lua"
 MANAGED_HEADER = "-- Managed by Feed the Flock. Change this through the Omarchy widget."
 LEGACY_HEADER = "-- Managed by Feed the Flock. Remove with scripts/manage-binding.sh remove."
 LOADER_COMMENT = "-- Feed the Flock owns its configurable global keybindings."
 LEGACY_LOADER_COMMENT = "-- Feed the Flock owns its capture keybinding."
-LOADER = 'pcall(require, "hypr.agent-feed-bindings")'
+LOADER = 'pcall(require, "hypr.feed-the-flock-bindings")'
 DEFAULT_RECORD_BINDING = "SHIFT + F9"
 DEFAULT_FEED_BINDING = "SUPER + CTRL + SHIFT + F"
 LEGACY_FEED_BINDING = "SHIFT + F10"

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui
-import "AgentFeedPresentation.js" as Presentation
+import "FeedTheFlockPresentation.js" as Presentation
 
 Rectangle {
   id: root

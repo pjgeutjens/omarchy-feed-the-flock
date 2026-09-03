@@ -6,13 +6,22 @@ qml_test_runner=/usr/lib/qt6/bin/qmltestrunner
 [[ -x $qml_test_runner ]] || qml_test_runner=$(command -v qmltestrunner)
 
 omarchy plugin validate "$plugin_dir"
+grep -Fq '"id": "io.github.pjgeutjens.feed-the-flock"' "$plugin_dir/manifest.json"
+grep -Fq 'module io.github.pjgeutjens.feedtheflock' "$plugin_dir/qmldir"
+if grep -RIEq \
+  'io\.github\.pjgeutjens\.agentfeed|~/.local/state/agent-feed|AGENT_FEED_|agent-feed\.db|AgentFeed(State|Presentation|KeyCatcher)' \
+  --exclude-dir=.git --exclude-dir=publication --exclude=preview.png --exclude=validate.sh \
+  "$plugin_dir"; then
+  echo "legacy Agent Feed identifiers remain in the release" >&2
+  exit 1
+fi
 grep -Fq 'omarchy plugin add https://github.com/pjgeutjens/omarchy-feed-the-flock.git --enable' \
   "$plugin_dir/README.md"
 grep -Fq 'scripts/prepare-remove.sh' "$plugin_dir/README.md"
 grep -Fq 'optional Dictation app (Voxtype)' "$plugin_dir/README.md"
 qmllint -I "$OMARCHY_PATH/shell" \
-  "$plugin_dir/AgentFeedState.qml" \
-  "$plugin_dir/AgentFeedKeyCatcher.qml" \
+  "$plugin_dir/FeedTheFlockState.qml" \
+  "$plugin_dir/FeedTheFlockKeyCatcher.qml" \
   "$plugin_dir/KeybindingsOverlay.qml" \
   "$plugin_dir/NotesOverlay.qml" \
   "$plugin_dir/BindingsOverlay.qml" \
@@ -36,7 +45,7 @@ for source in "$plugin_dir"/Panel*.qml "$plugin_dir/workspace/js/"*.js \
     exit 1
   fi
 done
-for branded_file in AgentFeedPresentation.js Panel.qml workspace/index.html; do
+for branded_file in FeedTheFlockPresentation.js Panel.qml workspace/index.html; do
   grep -Fq '󰆚' "$plugin_dir/$branded_file" || {
     echo "$branded_file does not use the md-cow product icon" >&2
     exit 1
@@ -70,9 +79,9 @@ grep -Fq 'iconText: "󰋺"' "$plugin_dir/PanelBucketControls.qml"
 grep -Fq 'iconText: "󰈇"' "$plugin_dir/PanelBucketControls.qml"
 grep -Fq 'iconText: "󰅁"' "$plugin_dir/PanelSectionControls.qml"
 grep -Fq 'iconText: "󰅂"' "$plugin_dir/PanelSectionControls.qml"
-grep -Fq '"hint": "oldest pending first"' "$plugin_dir/AgentFeedState.qml"
-grep -Fq '"hint": "newest pending first"' "$plugin_dir/AgentFeedState.qml"
-if grep -Eiq 'topmost|bottommost' "$plugin_dir/AgentFeedState.qml"; then
+grep -Fq '"hint": "oldest pending first"' "$plugin_dir/FeedTheFlockState.qml"
+grep -Fq '"hint": "newest pending first"' "$plugin_dir/FeedTheFlockState.qml"
+if grep -Eiq 'topmost|bottommost' "$plugin_dir/FeedTheFlockState.qml"; then
   echo "queue-order hints still use visual-position terminology" >&2
   exit 1
 fi
@@ -128,7 +137,7 @@ grep -Fq 'text: "Source: " + String(modelData.source || "Unknown")' "$plugin_dir
 grep -Fq 'text === "k" || text === "K"' "$plugin_dir/Panel.qml"
 grep -Fq 'width: root.keyColumnWidth' "$plugin_dir/KeybindingsOverlay.qml"
 grep -Fq 'command: [root.commandPath, "feed", "resume"]' \
-  "$plugin_dir/AgentFeedState.qml"
+  "$plugin_dir/FeedTheFlockState.qml"
 if grep -Fq 'feed", "resume"' "$plugin_dir/BarWidget.qml"; then
   echo "bar widget must not independently resume the feed worker" >&2
   exit 1

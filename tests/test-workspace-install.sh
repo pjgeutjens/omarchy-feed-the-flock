@@ -14,7 +14,7 @@ printf '%s\n' 'shipped v1' > "$source_workspace/index.html"
 printf '%s\n' 'script v1' > "$source_workspace/js/app.js"
 printf '%s\n' 'style v1' > "$source_workspace/styles/theme.css"
 
-AGENT_FEED_STATE_DIR="$state_dir" \
+FEED_THE_FLOCK_STATE_DIR="$state_dir" \
   python3 "$root/scripts/install-workspace.py" "$source_workspace" "$installed_workspace"
 
 printf '%s\n' 'my custom viewer' > "$installed_workspace/index.html"
@@ -23,7 +23,7 @@ printf '%s\n' 'shipped v2' > "$source_workspace/index.html"
 printf '%s\n' 'script v2' > "$source_workspace/js/app.js"
 rm "$source_workspace/styles/theme.css"
 
-install_output=$(AGENT_FEED_STATE_DIR="$state_dir" \
+install_output=$(FEED_THE_FLOCK_STATE_DIR="$state_dir" \
   python3 "$root/scripts/install-workspace.py" "$source_workspace" "$installed_workspace" 2>&1)
 
 [[ $(<"$installed_workspace/index.html") == 'my custom viewer' ]]
@@ -33,5 +33,30 @@ install_output=$(AGENT_FEED_STATE_DIR="$state_dir" \
 [[ ! -e "$installed_workspace/styles/theme.css" ]]
 grep -Fq 'Preserved customized workspace assets:' <<< "$install_output"
 grep -Fq 'index.html (new version: index.html.upstream)' <<< "$install_output"
+
+config_dir="$temporary/config"
+mkdir -p "$config_dir/workspace"
+printf '%s\n' 'custom workspace' > "$config_dir/workspace/index.html"
+FEED_THE_FLOCK_CONFIG_DIR="$config_dir" PYTHONPATH="$root/bin" \
+  python3 - "$config_dir/workspace/index.html" <<'PY'
+import sys
+from pathlib import Path
+
+from feed_the_flock.common import WORKSPACE_HTML
+
+assert WORKSPACE_HTML == Path(sys.argv[1])
+PY
+[[ $(<"$config_dir/workspace/index.html") == 'custom workspace' ]]
+
+empty_config="$temporary/empty-config"
+FEED_THE_FLOCK_CONFIG_DIR="$empty_config" PYTHONPATH="$root/bin" \
+  python3 - "$root/workspace/index.html" <<'PY'
+import sys
+from pathlib import Path
+
+from feed_the_flock.common import WORKSPACE_HTML
+
+assert WORKSPACE_HTML == Path(sys.argv[1])
+PY
 
 printf 'Workspace update preservation tests passed.\n'

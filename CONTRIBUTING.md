@@ -5,7 +5,7 @@ Feed the Flock is developed and tested on Omarchy Quattro. Keep changes scoped t
 ## Repository layout
 
 - `BarWidget.qml` and `Panel.qml` define the Omarchy entry points.
-- `AgentFeedState.qml` owns panel state and helper processes.
+- `FeedTheFlockState.qml` owns panel state and helper processes.
 - `bin/feed_the_flock/` contains capture, storage, delivery, keybinding, and workspace code.
 - `workspace/` contains the local browser interface.
 - `tests/` contains shell, Python, browser, and QML checks.
@@ -37,7 +37,7 @@ That script validates first, copies the plugin, rescans the shell, and enables t
 - Use argument arrays for commands. Give subprocesses a wall-clock timeout and terminate their process group on timeout.
 - Use descriptor-based no-follow reads for managed files and atomic replacement for generated files.
 - Keep all QML text sinks in plain-text mode unless sanitized rich text is intentional.
-- Preserve user-customized workspace assets during updates.
+- Keep user-customized workspace assets under `~/.config/feed-the-flock`; plugin updates must not write there.
 - Update removal steps when a change creates state, processes, configuration, or files outside the plugin checkout.
 
 Add a regression test for every bug fix. Run the full suite before committing a release candidate.

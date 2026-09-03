@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui
-import "." as AgentFeedCore
+import "." as FeedTheFlockCore
 
 Column {
   id: root
@@ -23,39 +23,39 @@ Column {
   }
 
   function selectedBucketName() {
-    var buckets = AgentFeedCore.AgentFeedState.buckets
+    var buckets = FeedTheFlockCore.FeedTheFlockState.buckets
     for (var i = 0; i < buckets.length; i++)
-      if (buckets[i].id === AgentFeedCore.AgentFeedState.activeBucketId) return buckets[i].name
+      if (buckets[i].id === FeedTheFlockCore.FeedTheFlockState.activeBucketId) return buckets[i].name
     return ""
   }
 
   function selectedSectionName() {
-    var sections = AgentFeedCore.AgentFeedState.sections
+    var sections = FeedTheFlockCore.FeedTheFlockState.sections
     for (var i = 0; i < sections.length; i++)
-      if (sections[i].id === AgentFeedCore.AgentFeedState.activeSectionId) return sections[i].name
+      if (sections[i].id === FeedTheFlockCore.FeedTheFlockState.activeSectionId) return sections[i].name
     return "selected section"
   }
 
   function feedQueuePosition(sectionId) {
-    var queue = AgentFeedCore.AgentFeedState.feedQueue
+    var queue = FeedTheFlockCore.FeedTheFlockState.feedQueue
     for (var i = 0; i < queue.length; i++)
       if (queue[i].sectionId === sectionId) return i
     return -1
   }
 
   function selectedSectionIsFallback() {
-    var sections = AgentFeedCore.AgentFeedState.sections
+    var sections = FeedTheFlockCore.FeedTheFlockState.sections
     for (var i = 0; i < sections.length; i++)
-      if (sections[i].id === AgentFeedCore.AgentFeedState.activeSectionId)
+      if (sections[i].id === FeedTheFlockCore.FeedTheFlockState.activeSectionId)
         return sections[i].systemKind === "unsorted"
     return false
   }
 
   function moveActiveSectionOrder(direction) {
-    if (AgentFeedCore.AgentFeedState.activeSectionId === ""
-        || AgentFeedCore.AgentFeedState.busy) return
-    AgentFeedCore.AgentFeedState.moveSection(
-      AgentFeedCore.AgentFeedState.activeSectionId, direction)
+    if (FeedTheFlockCore.FeedTheFlockState.activeSectionId === ""
+        || FeedTheFlockCore.FeedTheFlockState.busy) return
+    FeedTheFlockCore.FeedTheFlockState.moveSection(
+      FeedTheFlockCore.FeedTheFlockState.activeSectionId, direction)
   }
 
   function beginCreate() {
@@ -66,7 +66,7 @@ Column {
   }
 
   function beginRename() {
-    root.editingSectionId = AgentFeedCore.AgentFeedState.activeSectionId
+    root.editingSectionId = FeedTheFlockCore.FeedTheFlockState.activeSectionId
     root.creating = true
     newSectionField.text = root.selectedSectionName()
     Qt.callLater(function() { newSectionField.forceActiveFocus(); newSectionField.selectAll() })
@@ -76,8 +76,8 @@ Column {
     var name = newSectionField.text.trim()
     if (name === "") return
     var accepted = root.editingSectionId !== ""
-      ? AgentFeedCore.AgentFeedState.renameSection(root.editingSectionId, name)
-      : AgentFeedCore.AgentFeedState.createSection(name)
+      ? FeedTheFlockCore.FeedTheFlockState.renameSection(root.editingSectionId, name)
+      : FeedTheFlockCore.FeedTheFlockState.createSection(name)
     if (accepted) {
       root.creating = false
       root.editingSectionId = ""
@@ -88,13 +88,13 @@ Column {
 
   function beginDelete() {
     if (!root.selectedSectionIsFallback())
-      root.deletingSectionId = AgentFeedCore.AgentFeedState.activeSectionId
+      root.deletingSectionId = FeedTheFlockCore.FeedTheFlockState.activeSectionId
   }
 
   function confirmDelete(notesMode) {
     var sectionId = root.deletingSectionId
     root.deletingSectionId = ""
-    if (sectionId !== "") AgentFeedCore.AgentFeedState.deleteSection(sectionId, notesMode)
+    if (sectionId !== "") FeedTheFlockCore.FeedTheFlockState.deleteSection(sectionId, notesMode)
   }
 
   Row {
@@ -111,24 +111,24 @@ Column {
       PanelActionButton {
         iconText: "󰐕" // nf-md-plus
         tooltipText: "Add active section to feed queue (G)"
-        foreground: root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) >= 0
+        foreground: root.feedQueuePosition(FeedTheFlockCore.FeedTheFlockState.activeSectionId) >= 0
           ? Color.accent : root.dimForeground
         fontFamily: "JetBrainsMono Nerd Font"
-        enabled: AgentFeedCore.AgentFeedState.activeSectionId
-          !== AgentFeedCore.AgentFeedState.feedSectionId
-          && root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) < 0
-        onClicked: AgentFeedCore.AgentFeedState.addFeedSection(
-          AgentFeedCore.AgentFeedState.activeSectionId)
+        enabled: FeedTheFlockCore.FeedTheFlockState.activeSectionId
+          !== FeedTheFlockCore.FeedTheFlockState.feedSectionId
+          && root.feedQueuePosition(FeedTheFlockCore.FeedTheFlockState.activeSectionId) < 0
+        onClicked: FeedTheFlockCore.FeedTheFlockState.addFeedSection(
+          FeedTheFlockCore.FeedTheFlockState.activeSectionId)
       }
       PanelActionButton {
         iconText: "󱐋"
         tooltipText: "Switch feed to active section now (Shift+G)"
         foreground: root.dimForeground
         fontFamily: "JetBrainsMono Nerd Font"
-        enabled: AgentFeedCore.AgentFeedState.activeSectionId
-          !== AgentFeedCore.AgentFeedState.feedSectionId
-        onClicked: AgentFeedCore.AgentFeedState.selectFeedSectionNow(
-          AgentFeedCore.AgentFeedState.activeSectionId)
+        enabled: FeedTheFlockCore.FeedTheFlockState.activeSectionId
+          !== FeedTheFlockCore.FeedTheFlockState.feedSectionId
+        onClicked: FeedTheFlockCore.FeedTheFlockState.selectFeedSectionNow(
+          FeedTheFlockCore.FeedTheFlockState.activeSectionId)
       }
       PanelActionButton {
         iconText: "󰅁" // nf-md-chevron_left
@@ -166,7 +166,7 @@ Column {
     width: parent.width
     spacing: Style.space(6)
     Repeater {
-      model: AgentFeedCore.AgentFeedState.sections
+      model: FeedTheFlockCore.FeedTheFlockState.sections
       delegate: Button {
         required property var modelData
         text: (modelData.feedCurrent ? "●  "
@@ -174,13 +174,13 @@ Column {
             ? String(modelData.feedQueuePosition + 1) + "  " : ""))
           + modelData.name.toUpperCase() + "  " + modelData.messageCount + " MSG"
         bordered: true
-        foreground: modelData.id === AgentFeedCore.AgentFeedState.activeSectionId
+        foreground: modelData.id === FeedTheFlockCore.FeedTheFlockState.activeSectionId
           ? Color.accent : root.foreground
         fontFamily: root.fontFamily
         fontSize: Style.font.caption
         horizontalPadding: Style.space(8)
         verticalPadding: Style.space(4)
-        onClicked: AgentFeedCore.AgentFeedState.selectSection(modelData.id)
+        onClicked: FeedTheFlockCore.FeedTheFlockState.selectSection(modelData.id)
       }
     }
     Button {
@@ -214,17 +214,17 @@ Column {
       width: parent.width
       spacing: Style.space(5)
       Text {
-        text: (AgentFeedCore.AgentFeedState.feedEnabled ? "NOW  ·  " : "CURRENT  ·  ")
-          + AgentFeedCore.AgentFeedState.feedBucketName.toUpperCase()
-          + " / " + AgentFeedCore.AgentFeedState.feedSectionName.toUpperCase()
+        text: (FeedTheFlockCore.FeedTheFlockState.feedEnabled ? "NOW  ·  " : "CURRENT  ·  ")
+          + FeedTheFlockCore.FeedTheFlockState.feedBucketName.toUpperCase()
+          + " / " + FeedTheFlockCore.FeedTheFlockState.feedSectionName.toUpperCase()
         textFormat: Text.PlainText
-        color: AgentFeedCore.AgentFeedState.feedEnabled ? Color.accent : root.foreground
+        color: FeedTheFlockCore.FeedTheFlockState.feedEnabled ? Color.accent : root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
         font.bold: true
       }
       Text {
-        visible: AgentFeedCore.AgentFeedState.feedQueue.length === 0
+        visible: FeedTheFlockCore.FeedTheFlockState.feedQueue.length === 0
         text: "·  NO WAITING SECTIONS"
         textFormat: Text.PlainText
         color: root.dimForeground
@@ -232,7 +232,7 @@ Column {
         font.pixelSize: Style.font.caption
       }
       Repeater {
-        model: AgentFeedCore.AgentFeedState.feedQueue
+        model: FeedTheFlockCore.FeedTheFlockState.feedQueue
         delegate: Button {
           required property var modelData
           text: String(modelData.position + 1) + "  "
@@ -245,7 +245,7 @@ Column {
           fontSize: Style.font.caption
           horizontalPadding: Style.space(7)
           verticalPadding: Style.space(3)
-          onClicked: AgentFeedCore.AgentFeedState.removeFeedSection(modelData.sectionId)
+          onClicked: FeedTheFlockCore.FeedTheFlockState.removeFeedSection(modelData.sectionId)
         }
       }
     }
@@ -323,7 +323,7 @@ Column {
       text: root.editingSectionId !== "" ? "Save" : "Create"
       bordered: true
       foreground: root.foreground
-      enabled: newSectionField.text.trim() !== "" && !AgentFeedCore.AgentFeedState.busy
+      enabled: newSectionField.text.trim() !== "" && !FeedTheFlockCore.FeedTheFlockState.busy
       onClicked: root.submit()
     }
   }

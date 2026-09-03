@@ -70,7 +70,15 @@ Press `Enter` to edit a selected note. While editing, `Enter` saves, `Shift+Ente
 
 ### Custom workspace files
 
-The updater tracks hashes for the browser workspace. It updates unchanged built-in files, leaves user-created files alone, and preserves a locally edited built-in file. When an edited file conflicts with a new release, the release copy is written beside it as `<name>.upstream` for a manual merge.
+Keep custom viewer files outside the git-managed plugin directory so updates cannot overwrite them:
+
+```sh
+mkdir -p ~/.config/feed-the-flock
+cp -a ~/.config/omarchy/plugins/io.github.pjgeutjens.feed-the-flock/workspace \
+  ~/.config/feed-the-flock/
+```
+
+When `~/.config/feed-the-flock/workspace/index.html` exists, Feed the Flock loads that workspace instead of the built-in one. Rename or remove the custom `workspace` directory to return to the built-in viewer. Compare the custom files with the current built-in workspace when you want to adopt upstream changes.
 
 ## Markdown and images
 
@@ -91,21 +99,21 @@ Pending notes accept up to five PNG, JPEG, WebP, or GIF images of 8 MB each. Add
 
 ## Data and removal
 
-Notes, delivery history, recordings, logs, and managed images stay under `~/.local/state/agent-feed`. The workspace listens only on `127.0.0.1`. Note text and attachments leave the app only when they are sent to the chosen Herdr agent, which may have its own network and tool access.
+Notes, delivery history, recordings, logs, and managed images stay under `~/.local/state/feed-the-flock`. The workspace listens only on `127.0.0.1`. Note text and attachments leave the app only when they are sent to the chosen Herdr agent, which may have its own network and tool access.
 
 Before removing the plugin, stop its background processes and restore its managed keybindings:
 
 ```sh
-~/.config/omarchy/plugins/io.github.pjgeutjens.agentfeed/scripts/prepare-remove.sh
-omarchy plugin remove io.github.pjgeutjens.agentfeed
+~/.config/omarchy/plugins/io.github.pjgeutjens.feed-the-flock/scripts/prepare-remove.sh
+omarchy plugin remove io.github.pjgeutjens.feed-the-flock
 ```
 
-Removal keeps `~/.local/state/agent-feed` so an accidental uninstall does not erase notes. Delete that directory yourself if you also want to remove the stored data.
+Removal keeps `~/.local/state/feed-the-flock` so an accidental uninstall does not erase notes. Delete that directory yourself if you also want to remove the stored data.
 
 Update with:
 
 ```sh
-omarchy plugin update io.github.pjgeutjens.agentfeed
+omarchy plugin update io.github.pjgeutjens.feed-the-flock
 ```
 
 Feed the Flock is licensed under the [MIT License](LICENSE).

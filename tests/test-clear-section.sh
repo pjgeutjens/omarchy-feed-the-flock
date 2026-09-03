@@ -4,9 +4,9 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-export AGENT_FEED_STATE_DIR="$tmp/state"
+export FEED_THE_FLOCK_STATE_DIR="$tmp/state"
 cli="$root/bin/feed-the-flock"
-db="$AGENT_FEED_STATE_DIR/agent-feed.db"
+db="$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db"
 
 "$cli" init
 "$cli" section add 'Clear Me'
@@ -22,14 +22,14 @@ second_note=$("$cli" state | jq -r '.notes[] | select(.text == "Submitted clear 
 "$cli" note add 'Unrelated note'
 other_note=$("$cli" state | jq -r '.notes[] | select(.text == "Unrelated note") | .id')
 "$cli" section select "$section_id"
-mkdir -p "$AGENT_FEED_STATE_DIR/attachments" "$AGENT_FEED_STATE_DIR/attachments-escape"
-printf managed >"$AGENT_FEED_STATE_DIR/attachments/clear.png"
-printf unrelated >"$AGENT_FEED_STATE_DIR/attachments/other.png"
-printf external >"$AGENT_FEED_STATE_DIR/attachments-escape/outside.png"
+mkdir -p "$FEED_THE_FLOCK_STATE_DIR/attachments" "$FEED_THE_FLOCK_STATE_DIR/attachments-escape"
+printf managed >"$FEED_THE_FLOCK_STATE_DIR/attachments/clear.png"
+printf unrelated >"$FEED_THE_FLOCK_STATE_DIR/attachments/other.png"
+printf external >"$FEED_THE_FLOCK_STATE_DIR/attachments-escape/outside.png"
 sqlite3 "$db" <<SQL
-INSERT INTO attachments VALUES ('clear-managed', '$first_note', 'clear.png', 'image/png', '$AGENT_FEED_STATE_DIR/attachments/clear.png', 0, 1);
-INSERT INTO attachments VALUES ('clear-external', '$first_note', 'outside.png', 'image/png', '$AGENT_FEED_STATE_DIR/attachments-escape/outside.png', 1, 2);
-INSERT INTO attachments VALUES ('other-managed', '$other_note', 'other.png', 'image/png', '$AGENT_FEED_STATE_DIR/attachments/other.png', 0, 3);
+INSERT INTO attachments VALUES ('clear-managed', '$first_note', 'clear.png', 'image/png', '$FEED_THE_FLOCK_STATE_DIR/attachments/clear.png', 0, 1);
+INSERT INTO attachments VALUES ('clear-external', '$first_note', 'outside.png', 'image/png', '$FEED_THE_FLOCK_STATE_DIR/attachments-escape/outside.png', 1, 2);
+INSERT INTO attachments VALUES ('other-managed', '$other_note', 'other.png', 'image/png', '$FEED_THE_FLOCK_STATE_DIR/attachments/other.png', 0, 3);
 SQL
 
 sqlite3 "$db" "UPDATE feed_queue SET claim_token = 'active', claimed_at = strftime('%s','now') WHERE note_id = '$first_note'"
@@ -51,8 +51,8 @@ jq -e --arg id "$section_id" '
 [[ $(sqlite3 "$db" "SELECT COUNT(*) FROM feed_queue WHERE note_id IN ('$first_note', '$second_note')") == 2 ]]
 [[ $(sqlite3 "$db" "SELECT COUNT(*) FROM attachments WHERE note_id IN ('$first_note', '$second_note')") == 2 ]]
 [[ $(sqlite3 "$db" "SELECT COUNT(*) FROM section_feed_queue WHERE section_id = '$section_id'") == 1 ]]
-[[ -e $AGENT_FEED_STATE_DIR/attachments/clear.png ]]
-[[ -e $AGENT_FEED_STATE_DIR/attachments-escape/outside.png ]]
+[[ -e $FEED_THE_FLOCK_STATE_DIR/attachments/clear.png ]]
+[[ -e $FEED_THE_FLOCK_STATE_DIR/attachments-escape/outside.png ]]
 
 sqlite3 "$db" <<SQL
 UPDATE notes SET section_id = '$section_id', position = 0 WHERE id = '$first_note';
@@ -71,8 +71,8 @@ jq -e --arg id "$section_id" '
 [[ $(sqlite3 "$db" "SELECT COUNT(*) FROM section_feed_queue WHERE section_id = '$section_id'") == 1 ]]
 [[ $(sqlite3 "$db" "SELECT COUNT(*) FROM notes WHERE id = '$other_note'") == 1 ]]
 [[ $(sqlite3 "$db" "SELECT COUNT(*) FROM attachments WHERE id = 'other-managed'") == 1 ]]
-[[ ! -e $AGENT_FEED_STATE_DIR/attachments/clear.png ]]
-[[ -e $AGENT_FEED_STATE_DIR/attachments/other.png ]]
-[[ -e $AGENT_FEED_STATE_DIR/attachments-escape/outside.png ]]
+[[ ! -e $FEED_THE_FLOCK_STATE_DIR/attachments/clear.png ]]
+[[ -e $FEED_THE_FLOCK_STATE_DIR/attachments/other.png ]]
+[[ -e $FEED_THE_FLOCK_STATE_DIR/attachments-escape/outside.png ]]
 jq -e --arg id "$section_id" '.activeSectionId == $id and .notes == []' \
   <<<"$("$cli" state)" >/dev/null

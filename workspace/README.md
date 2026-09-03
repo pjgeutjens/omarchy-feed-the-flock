@@ -32,7 +32,7 @@ This directory contains the dependency-free browser workspace. The Python server
 4. Mutations go through `/api/*` routes and reload their result from SQLite.
 5. `/api/events` emits an SSE change event after stored data changes.
 
-Browser state is disposable. The database, managed attachments, logs, and Chromium profile belong under `~/.local/state/agent-feed`, outside this source tree.
+Browser state is disposable. The database, managed attachments, logs, and Chromium profile belong under `~/.local/state/feed-the-flock`, outside this source tree.
 
 ## Product rules
 
@@ -47,14 +47,16 @@ Browser state is disposable. The database, managed attachments, logs, and Chromi
 
 ## Installation and customization
 
-`scripts/install-workspace.py` records hashes in `~/.local/state/agent-feed/workspace-assets.json`. On update:
+End-user installations are Git checkouts. Custom viewer files therefore belong under `~/.config/feed-the-flock/workspace`, outside the plugin directory. When that directory contains `index.html`, the server loads the whole custom workspace from there. Plugin updates cannot write to it.
+
+The development installer also protects edits made inside its installed workspace. `scripts/install-workspace.py` records hashes in `~/.local/state/feed-the-flock/workspace-assets.json`. On a later development install:
 
 - unchanged built-in files receive the new release;
 - edited built-in files remain in place and get a neighboring `.upstream` copy;
 - user-created files remain untouched;
 - files removed from the release are deleted only when the installed copy is unchanged.
 
-Do not replace this installer with a directory-wide copy or cleanup. `tests/test-workspace-install.sh` enforces these rules.
+Do not replace this installer with a directory-wide copy or cleanup. Do not make the normal plugin updater write into `~/.config/feed-the-flock`. `tests/test-workspace-install.sh` enforces the selection and preservation rules.
 
 ## Checks
 

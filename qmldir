@@ -1,2 +1,2 @@
-module io.github.pjgeutjens.agentfeed
-singleton AgentFeedState 1.0 AgentFeedState.qml
+module io.github.pjgeutjens.feedtheflock
+singleton FeedTheFlockState 1.0 FeedTheFlockState.qml

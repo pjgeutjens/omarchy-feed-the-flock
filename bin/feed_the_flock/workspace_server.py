@@ -64,7 +64,7 @@ from .workspace_content import (
 
 
 class WorkspaceHandler(BaseHTTPRequestHandler):
-    server_version = "AgentFeedWorkspace/1"
+    server_version = "FeedTheFlockWorkspace/1"
 
     def log_message(self, format: str, *args: object) -> None:
         return

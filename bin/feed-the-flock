@@ -86,7 +86,7 @@ def seed_demo(_: argparse.Namespace) -> None:
         ],
     }
     with connect() as db:
-        bucket_id = "agent-feed"
+        bucket_id = "feed-the-flock"
         for position, (suffix, name) in enumerate(sample_sections):
             section_id = f"{bucket_id}:{suffix}"
             db.execute(
@@ -101,7 +101,7 @@ def seed_demo(_: argparse.Namespace) -> None:
                     (note_id, bucket_id, section_id, text, note_position, int(time.time()) - 600 + note_position),
                 )
         set_setting(db, "active_bucket", bucket_id)
-        set_setting(db, f"active_section:{bucket_id}", "agent-feed:capture-experience")
+        set_setting(db, f"active_section:{bucket_id}", "feed-the-flock:capture-experience")
         db.commit()
 
 

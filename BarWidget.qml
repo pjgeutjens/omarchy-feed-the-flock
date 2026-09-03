@@ -3,15 +3,15 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "." as AgentFeedCore
-import "AgentFeedPresentation.js" as Presentation
+import "." as FeedTheFlockCore
+import "FeedTheFlockPresentation.js" as Presentation
 
 BarWidget {
   id: root
-  moduleName: "io.github.pjgeutjens.agentfeed"
+  moduleName: "io.github.pjgeutjens.feed-the-flock"
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
-  readonly property string phase: Presentation.normalizePhase(AgentFeedCore.AgentFeedState.phase)
+  readonly property string phase: Presentation.normalizePhase(FeedTheFlockCore.FeedTheFlockState.phase)
 
   function injectPanel() {
     var panel = panelLoader.item
@@ -41,11 +41,11 @@ BarWidget {
   }
 
   IpcHandler {
-    target: "io.github.pjgeutjens.agentfeed"
+    target: "io.github.pjgeutjens.feed-the-flock"
     function open() { root.open() }
     function close() { root.close() }
     function toggle() { root.toggle() }
-    function refresh() { AgentFeedCore.AgentFeedState.refresh() }
+    function refresh() { FeedTheFlockCore.FeedTheFlockState.refresh() }
   }
 
   WidgetButton {
@@ -54,16 +54,16 @@ BarWidget {
     bar: root.bar
     text: Presentation.icon(root.phase)
     fontSize: Style.font.body + 2
-    tooltipText: Presentation.tooltip(root.phase, AgentFeedCore.AgentFeedState.totalCount)
-      + (AgentFeedCore.AgentFeedState.feedEnabled ? " · Feed active" : "")
-    active: root.phase !== "idle" || AgentFeedCore.AgentFeedState.feedEnabled
+    tooltipText: Presentation.tooltip(root.phase, FeedTheFlockCore.FeedTheFlockState.totalCount)
+      + (FeedTheFlockCore.FeedTheFlockState.feedEnabled ? " · Feed active" : "")
+    active: root.phase !== "idle" || FeedTheFlockCore.FeedTheFlockState.feedEnabled
     activeColor: root.phase === "recording" || root.phase === "error"
       ? (root.bar ? root.bar.urgent : Color.urgent)
-      : (root.phase === "success" || AgentFeedCore.AgentFeedState.feedEnabled
+      : (root.phase === "success" || FeedTheFlockCore.FeedTheFlockState.feedEnabled
         ? Color.accent
         : (root.bar ? root.bar.barForeground : Color.foreground))
     onPressed: function(buttonCode) {
-      if (buttonCode === Qt.MiddleButton) AgentFeedCore.AgentFeedState.refresh()
+      if (buttonCode === Qt.MiddleButton) FeedTheFlockCore.FeedTheFlockState.refresh()
       else root.toggle()
     }
   }

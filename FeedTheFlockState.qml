@@ -67,7 +67,7 @@ Item {
   signal bindingConflict(string mode, string shortcut, var actions)
 
   readonly property string pluginRoot: Quickshell.env("HOME")
-    + "/.config/omarchy/plugins/io.github.pjgeutjens.agentfeed"
+    + "/.config/omarchy/plugins/io.github.pjgeutjens.feed-the-flock"
   readonly property string commandPath: pluginRoot + "/bin/feed-the-flock"
   readonly property bool recording: phase === "recording"
   readonly property bool processing: phase === "transcribing"

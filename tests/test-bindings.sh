@@ -19,16 +19,16 @@ fi
 EOF
 chmod +x "$tmp/bin/hyprctl"
 : > "$tmp/hypr/bindings.lua"
-cat > "$tmp/hypr/agent-feed-bindings.lua" <<'EOF'
+cat > "$tmp/hypr/feed-the-flock-bindings.lua" <<'EOF'
 -- Managed by Feed the Flock. Change this through the Omarchy widget.
 -- No recording keybinding is assigned.
 -- No feeding keybinding is assigned.
 EOF
 printf '%s\n' '-- Feed the Flock owns its configurable global keybindings.' \
-  'pcall(require, "hypr.agent-feed-bindings")' >> "$tmp/hypr/bindings.lua"
+  'pcall(require, "hypr.feed-the-flock-bindings")' >> "$tmp/hypr/bindings.lua"
 export PATH="$tmp/bin:$PATH"
-export AGENT_FEED_STATE_DIR="$tmp/state"
-export AGENT_FEED_HYPR_CONFIG_DIR="$tmp/hypr"
+export FEED_THE_FLOCK_STATE_DIR="$tmp/state"
+export FEED_THE_FLOCK_HYPR_CONFIG_DIR="$tmp/hypr"
 export FAKE_BINDING_CONFLICT="$tmp/conflict"
 export FAKE_CONFIG_ERROR="$tmp/config-error"
 cli="$root/bin/feed-the-flock"
@@ -46,7 +46,7 @@ cli="$root/bin/feed-the-flock"
   and .feedBindingOverride == false
 ' >/dev/null
 grep -Fq 'o.bind("SUPER + CTRL + SHIFT + F", "Toggle Feed the Flock delivery"' \
-  "$tmp/hypr/agent-feed-bindings.lua"
+  "$tmp/hypr/feed-the-flock-bindings.lua"
 "$cli" binding record clear >/dev/null
 "$cli" binding feed clear >/dev/null
 
@@ -56,9 +56,9 @@ grep -Fq 'o.bind("SUPER + CTRL + SHIFT + F", "Toggle Feed the Flock delivery"' \
   .recordBinding == "SUPER + F8" and .feedBinding == "CTRL + SHIFT + F8"
   and .bindingsInstalled == true
 ' >/dev/null
-grep -Fq 'Start Feed the Flock capture' "$tmp/hypr/agent-feed-bindings.lua"
-grep -Fq 'Toggle Feed the Flock delivery' "$tmp/hypr/agent-feed-bindings.lua"
-grep -Fxq 'pcall(require, "hypr.agent-feed-bindings")' "$tmp/hypr/bindings.lua"
+grep -Fq 'Start Feed the Flock capture' "$tmp/hypr/feed-the-flock-bindings.lua"
+grep -Fq 'Toggle Feed the Flock delivery' "$tmp/hypr/feed-the-flock-bindings.lua"
+grep -Fxq 'pcall(require, "hypr.feed-the-flock-bindings")' "$tmp/hypr/bindings.lua"
 
 touch "$tmp/conflict"
 set +e
@@ -76,37 +76,37 @@ jq -e '
 "$cli" state | jq -e '.recordBinding == "SUPER + F8" and .recordBindingOverride == false' >/dev/null
 
 "$cli" binding record set 'SUPER + F7' --override >/dev/null
-grep -Fq 'hl.unbind("SUPER + F7")' "$tmp/hypr/agent-feed-bindings.lua"
+grep -Fq 'hl.unbind("SUPER + F7")' "$tmp/hypr/feed-the-flock-bindings.lua"
 "$cli" state | jq -e '.recordBinding == "SUPER + F7" and .recordBindingOverride == true' >/dev/null
 
 rm "$tmp/conflict"
 "$cli" binding record set 'SUPER + F6' >/dev/null
-! grep -Fq 'hl.unbind("SUPER + F7")' "$tmp/hypr/agent-feed-bindings.lua"
+! grep -Fq 'hl.unbind("SUPER + F7")' "$tmp/hypr/feed-the-flock-bindings.lua"
 "$cli" state | jq -e '.recordBinding == "SUPER + F6" and .recordBindingOverride == false' >/dev/null
 
-before_binding=$(sha256sum "$tmp/hypr/agent-feed-bindings.lua")
+before_binding=$(sha256sum "$tmp/hypr/feed-the-flock-bindings.lua")
 before_loader=$(sha256sum "$tmp/hypr/bindings.lua")
 touch "$tmp/config-error"
 if "$cli" binding record set 'SUPER + F5' >/dev/null 2>&1; then
   echo 'invalid Hyprland configuration was accepted' >&2
   exit 1
 fi
-[[ $(sha256sum "$tmp/hypr/agent-feed-bindings.lua") == "$before_binding" ]]
+[[ $(sha256sum "$tmp/hypr/feed-the-flock-bindings.lua") == "$before_binding" ]]
 [[ $(sha256sum "$tmp/hypr/bindings.lua") == "$before_loader" ]]
 "$cli" state | jq -e '.recordBinding == "SUPER + F6"' >/dev/null
 rm "$tmp/config-error"
 
 "$cli" binding record clear >/dev/null
 "$cli" binding remove >/dev/null
-[[ ! -e $tmp/hypr/agent-feed-bindings.lua ]]
-! grep -Fq 'hypr.agent-feed-bindings' "$tmp/hypr/bindings.lua"
+[[ ! -e $tmp/hypr/feed-the-flock-bindings.lua ]]
+! grep -Fq 'hypr.feed-the-flock-bindings' "$tmp/hypr/bindings.lua"
 "$cli" state | jq -e '
   .recordBinding == "" and .feedBinding == "" and .bindingsInstalled == false
 ' >/dev/null
 
 # Migrate the original fixed-key installation without losing its reversible overrides.
 rm -rf "$tmp/state"
-cat > "$tmp/hypr/agent-feed-bindings.lua" <<EOF
+cat > "$tmp/hypr/feed-the-flock-bindings.lua" <<EOF
 -- Managed by Feed the Flock. Remove with scripts/manage-binding.sh remove.
 hl.unbind("SHIFT + F9")
 hl.unbind("SHIFT + F10")
@@ -115,7 +115,7 @@ o.bind("SHIFT + F9", "Stop Feed the Flock capture (push-to-talk)", "$cli record 
 o.bind("SHIFT + F10", "Toggle Feed the Flock delivery", "$cli feed toggle")
 EOF
 printf '%s\n' '-- Feed the Flock owns its configurable global keybindings.' \
-  'pcall(require, "hypr.agent-feed-bindings")' > "$tmp/hypr/bindings.lua"
+  'pcall(require, "hypr.feed-the-flock-bindings")' > "$tmp/hypr/bindings.lua"
 "$cli" init
 "$cli" state | jq -e '
   .recordBinding == "SHIFT + F9" and .feedBinding == "SHIFT + F10"

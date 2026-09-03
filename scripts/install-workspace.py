@@ -61,7 +61,7 @@ def main() -> int:
         raise SystemExit("usage: install-workspace.py SOURCE DESTINATION")
     source, destination = map(Path, sys.argv[1:])
     state_dir = Path(os.environ.get(
-        "AGENT_FEED_STATE_DIR", Path.home() / ".local/state/agent-feed"
+        "FEED_THE_FLOCK_STATE_DIR", Path.home() / ".local/state/feed-the-flock"
     ))
     manifest_path = state_dir / "workspace-assets.json"
     try:

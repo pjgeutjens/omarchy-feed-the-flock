@@ -2,7 +2,7 @@
 set -euo pipefail
 
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-plugin_id=io.github.pjgeutjens.agentfeed
+plugin_id=io.github.pjgeutjens.feed-the-flock
 plugin_dir="$HOME/.config/omarchy/plugins/$plugin_id"
 
 if [[ $source_dir == "$plugin_dir" ]]; then
@@ -19,11 +19,11 @@ install -m755 "$source_dir/scripts/prepare-remove.sh" "$plugin_dir/scripts/prepa
 install -m644 "$source_dir/bin/feed_the_flock/"*.py "$plugin_dir/bin/feed_the_flock/"
 install -m755 "$source_dir/bin/feed-the-flock" "$plugin_dir/bin/feed-the-flock"
 python3 "$source_dir/scripts/install-workspace.py" "$source_dir/workspace" "$plugin_dir/workspace"
-for file in manifest.json qmldir AgentFeedState.qml AgentFeedPresentation.js AgentFeedKeyCatcher.qml KeybindingsOverlay.qml NotesOverlay.qml BindingsOverlay.qml PanelBucketControls.qml PanelSectionControls.qml PanelRoutingControls.qml BarWidget.qml Panel.qml README.md; do
+for file in manifest.json qmldir FeedTheFlockState.qml FeedTheFlockPresentation.js FeedTheFlockKeyCatcher.qml KeybindingsOverlay.qml NotesOverlay.qml BindingsOverlay.qml PanelBucketControls.qml PanelSectionControls.qml PanelRoutingControls.qml BarWidget.qml Panel.qml README.md; do
   install -m644 "$source_dir/$file" "$plugin_dir/$file"
 done
 "$plugin_dir/bin/feed-the-flock" init
-if [[ -f $HOME/.config/hypr/agent-feed-bindings.lua ]]; then
+if [[ -f $HOME/.config/hypr/feed-the-flock-bindings.lua ]]; then
   "$source_dir/scripts/manage-binding.sh" install
 fi
 

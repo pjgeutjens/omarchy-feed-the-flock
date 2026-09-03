@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui
-import "." as AgentFeedCore
-import "AgentFeedPresentation.js" as Presentation
+import "." as FeedTheFlockCore
+import "FeedTheFlockPresentation.js" as Presentation
 
 Column {
   id: root
@@ -20,7 +20,7 @@ Column {
   }
 
   function openTargetPicker() {
-    if (AgentFeedCore.AgentFeedState.deliveryTargets.length > 0) targetPicker.open()
+    if (FeedTheFlockCore.FeedTheFlockState.deliveryTargets.length > 0) targetPicker.open()
   }
 
   function openModePicker() { modePicker.open() }
@@ -31,17 +31,17 @@ Column {
     width: parent.width
     height: implicitHeight
     label: "TARGET"
-    value: AgentFeedCore.AgentFeedState.selectedDeliveryTargetId
-    options: Presentation.targetDropdownOptions(AgentFeedCore.AgentFeedState.deliveryTargets)
-    triggerLabel: AgentFeedCore.AgentFeedState.selectedDeliveryTargetLabel
+    value: FeedTheFlockCore.FeedTheFlockState.selectedDeliveryTargetId
+    options: Presentation.targetDropdownOptions(FeedTheFlockCore.FeedTheFlockState.deliveryTargets)
+    triggerLabel: FeedTheFlockCore.FeedTheFlockState.selectedDeliveryTargetLabel
     placeholderText: "Filter targets…  ↓ results"
     popupRowHeight: Style.space(42)
     foreground: root.foreground
     fontFamily: root.fontFamily
-    enabled: !AgentFeedCore.AgentFeedState.busy && options.length > 0
+    enabled: !FeedTheFlockCore.FeedTheFlockState.busy && options.length > 0
     opacity: enabled ? 1 : 0.55
     onChanged: function(targetId) {
-      AgentFeedCore.AgentFeedState.selectDeliveryTarget(targetId)
+      FeedTheFlockCore.FeedTheFlockState.selectDeliveryTarget(targetId)
       root.restoreFocus()
     }
   }
@@ -55,15 +55,15 @@ Column {
       width: parent.width - feedButton.width - parent.spacing
       height: implicitHeight
       label: "MODE"
-      value: AgentFeedCore.AgentFeedState.deliveryMode
-      options: Presentation.hintedDropdownOptions(AgentFeedCore.AgentFeedState.deliveryModes)
+      value: FeedTheFlockCore.FeedTheFlockState.deliveryMode
+      options: Presentation.hintedDropdownOptions(FeedTheFlockCore.FeedTheFlockState.deliveryModes)
       placeholderText: "Filter delivery modes..."
       popupRowHeight: Style.space(42)
       foreground: root.foreground
       fontFamily: root.fontFamily
-      enabled: !AgentFeedCore.AgentFeedState.busy
+      enabled: !FeedTheFlockCore.FeedTheFlockState.busy
       onChanged: function(modeId) {
-        AgentFeedCore.AgentFeedState.selectDeliveryMode(modeId)
+        FeedTheFlockCore.FeedTheFlockState.selectDeliveryMode(modeId)
         root.restoreFocus()
       }
     }
@@ -73,14 +73,14 @@ Column {
       width: Style.space(86)
       height: Style.space(32)
       anchors.bottom: parent.bottom
-      text: (AgentFeedCore.AgentFeedState.feedEnabled ? "■ ON" : "▶ OFF")
-        + " · Q " + AgentFeedCore.AgentFeedState.pendingCount
+      text: (FeedTheFlockCore.FeedTheFlockState.feedEnabled ? "■ ON" : "▶ OFF")
+        + " · Q " + FeedTheFlockCore.FeedTheFlockState.pendingCount
       bordered: true
-      foreground: AgentFeedCore.AgentFeedState.feedEnabled ? Color.accent : root.foreground
+      foreground: FeedTheFlockCore.FeedTheFlockState.feedEnabled ? Color.accent : root.foreground
       fontFamily: root.fontFamily
       fontSize: Style.font.caption
-      enabled: !AgentFeedCore.AgentFeedState.busy
-      onClicked: AgentFeedCore.AgentFeedState.toggleFeed()
+      enabled: !FeedTheFlockCore.FeedTheFlockState.busy
+      onClicked: FeedTheFlockCore.FeedTheFlockState.toggleFeed()
     }
   }
 
@@ -89,15 +89,15 @@ Column {
     width: parent.width
     height: implicitHeight
     label: "ORDER"
-    value: AgentFeedCore.AgentFeedState.queueOrder
-    options: Presentation.hintedDropdownOptions(AgentFeedCore.AgentFeedState.queueOrders)
+    value: FeedTheFlockCore.FeedTheFlockState.queueOrder
+    options: Presentation.hintedDropdownOptions(FeedTheFlockCore.FeedTheFlockState.queueOrders)
     placeholderText: "Filter queue orders..."
     popupRowHeight: Style.space(42)
     foreground: root.foreground
     fontFamily: root.fontFamily
-    enabled: !AgentFeedCore.AgentFeedState.busy
+    enabled: !FeedTheFlockCore.FeedTheFlockState.busy
     onChanged: function(orderId) {
-      AgentFeedCore.AgentFeedState.selectQueueOrder(orderId)
+      FeedTheFlockCore.FeedTheFlockState.selectQueueOrder(orderId)
       root.restoreFocus()
     }
   }

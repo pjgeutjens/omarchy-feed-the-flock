@@ -233,7 +233,7 @@ def select_mode(args: argparse.Namespace) -> None:
 
 
 def start_feed_worker() -> None:
-    if os.environ.get("AGENT_FEED_DISABLE_WORKER") == "1":
+    if os.environ.get("FEED_THE_FLOCK_DISABLE_WORKER") == "1":
         return
     log = open_private_log(FEED_LOG)
     subprocess.Popen(
@@ -245,7 +245,7 @@ def start_feed_worker() -> None:
 
 
 def start_feed_resume_countdown() -> None:
-    if os.environ.get("AGENT_FEED_DISABLE_WORKER") == "1":
+    if os.environ.get("FEED_THE_FLOCK_DISABLE_WORKER") == "1":
         return
     log = open_private_log(FEED_LOG)
     subprocess.Popen(

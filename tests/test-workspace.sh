@@ -6,9 +6,9 @@ tmp=$(mktemp -d)
 server=''
 browser=''
 trap '[[ -z $browser ]] || kill "$browser" 2>/dev/null || true; [[ -z $server ]] || kill "$server" 2>/dev/null || true; rm -rf "$tmp"' EXIT
-export AGENT_FEED_STATE_DIR="$tmp/state" AGENT_FEED_EXPORT_DIR="$tmp/exports"
-export AGENT_FEED_WORKSPACE_PORT=47832
-export AGENT_FEED_DISABLE_WORKER=1 AGENT_FEED_HERDR="$tmp/herdr"
+export FEED_THE_FLOCK_STATE_DIR="$tmp/state" FEED_THE_FLOCK_EXPORT_DIR="$tmp/exports"
+export FEED_THE_FLOCK_WORKSPACE_PORT=47832
+export FEED_THE_FLOCK_DISABLE_WORKER=1 FEED_THE_FLOCK_HERDR="$tmp/herdr"
 export FAKE_WEBAPP_LOG="$tmp/webapp.log"
 export PATH="$tmp:$PATH"
 cat >"$tmp/omarchy-launch-webapp" <<'EOF'
@@ -24,8 +24,8 @@ fi
 EOF
 chmod +x "$tmp/herdr"
 cli="$root/bin/feed-the-flock"
-mkdir -p "$AGENT_FEED_STATE_DIR"
-python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+mkdir -p "$FEED_THE_FLOCK_STATE_DIR"
+python3 - "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<'PY'
 import sqlite3
 import sys
 with sqlite3.connect(sys.argv[1]) as db:
@@ -34,15 +34,15 @@ with sqlite3.connect(sys.argv[1]) as db:
     db.execute("INSERT INTO migration_probe(value) VALUES ('preserved')")
 PY
 "$cli" init
-python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+python3 - "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<'PY'
 import sqlite3
 import sys
 with sqlite3.connect(sys.argv[1]) as db:
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
     assert db.execute("SELECT value FROM migration_probe").fetchone()[0] == "preserved"
 PY
-[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-wal ]]
-[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-shm ]]
+[[ ! -e $FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db-wal ]]
+[[ ! -e $FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db-shm ]]
 "$cli" note add 'Viewer feed control test'
 "$cli" bucket select ideas
 "$cli" target select herdr:w1:p2
@@ -54,11 +54,11 @@ done
 
 "$cli" bucket workspace inbox >/dev/null
 grep -Fxq 'http://127.0.0.1:47832/?bucket=inbox' "$FAKE_WEBAPP_LOG"
-grep -Fxq -- "--user-data-dir=$AGENT_FEED_STATE_DIR/workspace-browser" "$FAKE_WEBAPP_LOG"
+grep -Fxq -- "--user-data-dir=$FEED_THE_FLOCK_STATE_DIR/workspace-browser" "$FAKE_WEBAPP_LOG"
 grep -Fxq -- '--disable-extensions' "$FAKE_WEBAPP_LOG"
 grep -Fxq -- '--no-first-run' "$FAKE_WEBAPP_LOG"
 grep -Fxq -- '--no-default-browser-check' "$FAKE_WEBAPP_LOG"
-[[ $(stat -c '%a' "$AGENT_FEED_STATE_DIR/workspace-browser") == 700 ]]
+[[ $(stat -c '%a' "$FEED_THE_FLOCK_STATE_DIR/workspace-browser") == 700 ]]
 
 # Event streams and ordinary API requests must release every SQLite descriptor.
 baseline_fds=$(find "/proc/$server/fd" -maxdepth 1 -type l | wc -l)
@@ -79,14 +79,14 @@ grep -Fq 'event: change' "$tmp/events-1"
 # The server discovers a closed SSE client on its next 15-second keepalive.
 sleep 16
 curl -fsS http://127.0.0.1:47832/api/buckets >/dev/null
-if find "/proc/$server/fd" -maxdepth 1 -type l -lname '*agent-feed.db-* (deleted)' | grep -q .; then
+if find "/proc/$server/fd" -maxdepth 1 -type l -lname '*feed-the-flock.db-* (deleted)' | grep -q .; then
   echo "workspace retained deleted SQLite sidecar descriptors" >&2
-  find "/proc/$server/fd" -maxdepth 1 -type l -lname '*agent-feed.db-* (deleted)' -printf '%f -> %l\n' >&2
+  find "/proc/$server/fd" -maxdepth 1 -type l -lname '*feed-the-flock.db-* (deleted)' -printf '%f -> %l\n' >&2
   exit 1
 fi
 after_fds=$(find "/proc/$server/fd" -maxdepth 1 -type l | wc -l)
-[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-wal ]]
-[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-shm ]]
+[[ ! -e $FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db-wal ]]
+[[ ! -e $FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db-shm ]]
 (( after_fds <= baseline_fds + 4 )) || {
   echo "workspace descriptor count grew from $baseline_fds to $after_fds" >&2
   exit 1
@@ -107,15 +107,15 @@ for worker in {1..4}; do
 done
 for worker in "${stress_workers[@]}"; do wait "$worker"; done
 kill -0 "$server"
-python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" <<'PY'
+python3 - "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<'PY'
 import sqlite3
 import sys
 with sqlite3.connect(sys.argv[1]) as db:
     assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
 PY
-[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-wal ]]
-[[ ! -e $AGENT_FEED_STATE_DIR/agent-feed.db-shm ]]
+[[ ! -e $FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db-wal ]]
+[[ ! -e $FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db-shm ]]
 
 curl -fsS http://127.0.0.1:47832/api/targets \
   | jq -e '.selectedTargetId == "herdr:w1:p2"
@@ -151,7 +151,7 @@ external_file="$tmp/must-survive.txt"
 printf 'outside managed attachments' >"$external_file"
 "$cli" note add 'Delete route attachment guard'
 guard_note_id=$("$cli" state | jq -r '.notes[] | select(.text == "Delete route attachment guard") | .id')
-sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" <<SQL
+sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<SQL
 INSERT INTO attachments VALUES (
   'unsafe-note-attachment', '$guard_note_id', 'outside.txt', 'image/png', '$external_file', 0, 1
 );
@@ -160,12 +160,12 @@ curl -fsS -X POST -H 'Content-Type: application/json' \
   --data "$(jq -n --arg id "$guard_note_id" '{id: $id}')" \
   http://127.0.0.1:47832/api/note/delete >/dev/null
 [[ -f $external_file ]]
-[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+[[ $(sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" \
   "SELECT COUNT(*) FROM attachments WHERE id = 'unsafe-note-attachment'") == 0 ]]
 
 "$cli" note add 'Single attachment guard'
 guard_note_id=$("$cli" state | jq -r '.notes[] | select(.text == "Single attachment guard") | .id')
-sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" <<SQL
+sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" <<SQL
 INSERT INTO attachments VALUES (
   'unsafe-single-attachment', '$guard_note_id', 'outside.txt', 'image/png', '$external_file', 0, 1
 );
@@ -175,7 +175,7 @@ SQL
   http://127.0.0.1:47832/api/attachment/delete) == 400 ]]
 grep -Fq 'attachment file path is unsafe' "$tmp/unsafe-attachment.json"
 [[ -f $external_file ]]
-[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+[[ $(sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" \
   "SELECT COUNT(*) FROM attachments WHERE id = 'unsafe-single-attachment'") == 1 ]]
 
 curl -fsS -X POST -H 'Content-Type: application/json' \
@@ -301,7 +301,7 @@ reset_result=$(curl -fsS -X POST -H 'Content-Type: application/json' --data '{}'
 jq -e '.ok == true and .resetCount >= 1' <<<"$reset_result" >/dev/null
 curl -fsS 'http://127.0.0.1:47832/api/bucket?id=imported-viewer' \
   | jq -e '.noteCount == 2 and .submittedCount == 0 and .queuedCount == 2' >/dev/null
-sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+sqlite3 "$FEED_THE_FLOCK_STATE_DIR/feed-the-flock.db" \
   "SELECT COUNT(*) FROM feed_queue WHERE delivered_at IS NOT NULL OR delivery_kind IS NOT NULL OR delivery_sequence IS NOT NULL" \
   | grep -Fxq 0
 clear_section_id=$(jq -r '.sections[] | select(.name == "Queue") | .id' <<<"$imported_document")

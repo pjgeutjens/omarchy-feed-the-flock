@@ -2,7 +2,7 @@
 set -euo pipefail
 
 mode=${1:-install}
-plugin_id=io.github.pjgeutjens.agentfeed
+plugin_id=io.github.pjgeutjens.feed-the-flock
 plugin_dir="$HOME/.config/omarchy/plugins/$plugin_id"
 helper="$plugin_dir/bin/feed-the-flock"
 

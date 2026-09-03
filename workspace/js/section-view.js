@@ -15,7 +15,7 @@ export function createSectionRenderer({
   setStatus,
   showToast,
 }) {
-  let showSubmitted = localStorage.getItem('agent-feed-show-submitted') !== 'false';
+  let showSubmitted = localStorage.getItem('feed-the-flock-show-submitted') !== 'false';
   const dragScroller = createViewportDragScroller();
 
   document.addEventListener('dragover', event => {
@@ -229,7 +229,7 @@ export function createSectionRenderer({
       toggleSubmitted.textContent = showSubmitted ? 'Hide submitted' : 'Show submitted';
       toggleSubmitted.onclick = () => {
         showSubmitted = !showSubmitted;
-        localStorage.setItem('agent-feed-show-submitted', String(showSubmitted));
+        localStorage.setItem('feed-the-flock-show-submitted', String(showSubmitted));
         timeline.classList.toggle('hide-submitted', !showSubmitted);
         toggleSubmitted.textContent = showSubmitted ? 'Hide submitted' : 'Show submitted';
       };

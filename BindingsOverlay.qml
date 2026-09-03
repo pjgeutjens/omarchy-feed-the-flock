@@ -358,7 +358,7 @@ Rectangle {
             }
             Text {
               width: parent.width
-              text: "Managed file: ~/.config/hypr/agent-feed-bindings.lua"
+              text: "Managed file: ~/.config/hypr/feed-the-flock-bindings.lua"
               textFormat: Text.PlainText
               wrapMode: Text.WrapAnywhere
               color: root.dimForeground
