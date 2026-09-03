@@ -201,14 +201,10 @@ Column {
     spacing: Style.space(5)
     Text {
       width: parent.width
-      text: (AgentFeedCore.AgentFeedState.feedEnabled ? "FEEDING  ·  " : "READY  ·  ")
-        + (AgentFeedCore.AgentFeedState.feedEnabled
-          ? AgentFeedCore.AgentFeedState.feedBucketName.toUpperCase()
-            + " / " + AgentFeedCore.AgentFeedState.feedSectionName.toUpperCase()
-          : root.selectedBucketName().toUpperCase()
-            + " / " + root.selectedSectionName().toUpperCase())
+      text: "VIEWING  ·  " + root.selectedBucketName().toUpperCase()
+        + " / " + root.selectedSectionName().toUpperCase()
       textFormat: Text.PlainText
-      color: AgentFeedCore.AgentFeedState.feedEnabled ? Color.accent : root.dimForeground
+      color: root.dimForeground
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       font.bold: true
@@ -218,8 +214,18 @@ Column {
       width: parent.width
       spacing: Style.space(5)
       Text {
+        text: (AgentFeedCore.AgentFeedState.feedEnabled ? "NOW  ·  " : "CURRENT  ·  ")
+          + AgentFeedCore.AgentFeedState.feedBucketName.toUpperCase()
+          + " / " + AgentFeedCore.AgentFeedState.feedSectionName.toUpperCase()
+        textFormat: Text.PlainText
+        color: AgentFeedCore.AgentFeedState.feedEnabled ? Color.accent : root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+      }
+      Text {
         visible: AgentFeedCore.AgentFeedState.feedQueue.length === 0
-        text: "QUEUE EMPTY"
+        text: "·  NO WAITING SECTIONS"
         textFormat: Text.PlainText
         color: root.dimForeground
         font.family: root.fontFamily

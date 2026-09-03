@@ -25,7 +25,7 @@ function targetDropdownOptions(values) {
     options.push({
       "value": String(target.id || ""),
       "label": String(target.label || "Unnamed target"),
-      "description": "Herdr · " + String(target.status || "unknown")
+      "description": String(target.status || "unknown")
     })
   }
   return options

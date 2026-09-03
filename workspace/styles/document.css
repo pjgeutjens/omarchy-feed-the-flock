@@ -12,7 +12,8 @@ section.feed-queued {
   border: 1px dashed color-mix(in srgb, var(--accent) 38%, transparent);
   border-radius: 10px; background: color-mix(in srgb, var(--accent) 3%, transparent);
 }
-section.section-drop { border-top-color: var(--accent); }
+section.section-drop-before { border-top-color: var(--accent); }
+section.section-drop-after { border-bottom-color: var(--accent); }
 section:focus { outline: none; }
 section.selected > .section-heading {
   margin-inline: -8px; padding-inline: 8px; border-radius: 5px;

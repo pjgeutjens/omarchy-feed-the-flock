@@ -27,13 +27,14 @@ function closeModal(value) {
 
 export function showModal({ title: heading, message: detail = '', value = '', input: wantsInput = false,
                      confirmLabel = 'Confirm', danger = false, secondaryLabel = '',
-                     maxLength = 50 }) {
+                     maxLength = 50, messageClass = '' }) {
   if (open) closeModal(null);
   open = true;
   inputMode = wantsInput;
   previousFocus = document.activeElement;
   title.textContent = heading;
   message.textContent = detail;
+  message.className = `modal-message${messageClass ? ` ${messageClass}` : ''}`;
   message.hidden = !detail;
   input.hidden = !wantsInput;
   input.value = value;

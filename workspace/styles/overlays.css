@@ -49,6 +49,8 @@
 .modal-backdrop[hidden] { display: none; }
 .modal-card {
   width: min(440px, 100%); padding: 22px;
+  max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px);
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
   border: 1px solid color-mix(in srgb, var(--text) 16%, var(--faint));
   border-radius: 11px; background: color-mix(in srgb, var(--bg) 94%, var(--text));
   box-shadow: 0 24px 80px rgba(0,0,0,.5);
@@ -56,6 +58,8 @@
 .modal-eyebrow { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .modal-card h2 { margin: 5px 0 0; font-size: 24px; }
 .modal-message { margin: 10px 0 0; color: var(--muted); white-space: pre-line; }
+.modal-message.keyboard-reference { font-size: 13px; line-height: 1.45; }
+.routing-shortcuts { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
 .modal-input {
   width: 100%; margin-top: 16px; padding: 10px 11px;
   border: 1px solid var(--faint); border-radius: 7px;

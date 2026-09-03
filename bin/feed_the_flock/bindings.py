@@ -21,7 +21,8 @@ LOADER_COMMENT = "-- Feed the Flock owns its configurable global keybindings."
 LEGACY_LOADER_COMMENT = "-- Feed the Flock owns its capture keybinding."
 LOADER = 'pcall(require, "hypr.agent-feed-bindings")'
 DEFAULT_RECORD_BINDING = "SHIFT + F9"
-DEFAULT_FEED_BINDING = "SHIFT + F10"
+DEFAULT_FEED_BINDING = "SUPER + CTRL + SHIFT + F"
+LEGACY_FEED_BINDING = "SHIFT + F10"
 CAPTURE_SUBMAP = "feed-the-flock-shortcut-capture"
 MAX_CONFIG_BYTES = 2 * 1024 * 1024
 
@@ -66,7 +67,7 @@ def _migrated_binding_values() -> dict[str, object]:
     recognized = text.startswith((MANAGED_HEADER, LEGACY_HEADER))
     if text.startswith(LEGACY_HEADER):
         record = DEFAULT_RECORD_BINDING
-        feed = DEFAULT_FEED_BINDING
+        feed = LEGACY_FEED_BINDING
     else:
         record_match = re.search(
             r'o\.bind\("([A-Z0-9 +_]+)", "Start Feed the Flock capture', text,
@@ -86,7 +87,7 @@ def _migrated_binding_values() -> dict[str, object]:
 
 
 def binding_values(db: sqlite3.Connection, *, persist_migration: bool = True) -> dict[str, object]:
-    from .store import set_setting, setting
+    from .store_core import set_setting, setting
 
     if not _setting_exists(db, "record_binding"):
         inferred = _migrated_binding_values()
@@ -305,7 +306,7 @@ def _restore(path: Path, snapshot: tuple[bool, bytes, int]) -> None:
 
 
 def apply_bindings(db: sqlite3.Connection, values: dict[str, object]) -> None:
-    from .store import set_setting
+    from .store_core import set_setting
 
     binding_snapshot = _read_snapshot(BINDING_FILE)
     user_snapshot = _read_snapshot(USER_BINDINGS)
@@ -337,7 +338,7 @@ def apply_bindings(db: sqlite3.Connection, values: dict[str, object]) -> None:
 
 
 def set_binding(args: argparse.Namespace) -> None:
-    from .store import connect
+    from .store_core import connect
 
     normalized, key, modmask = normalize_binding(args.shortcut)
     with connect() as db:
@@ -360,7 +361,7 @@ def set_binding(args: argparse.Namespace) -> None:
 
 
 def clear_binding(args: argparse.Namespace) -> None:
-    from .store import connect
+    from .store_core import connect
 
     with connect() as db:
         values = binding_values(db)
@@ -370,22 +371,15 @@ def clear_binding(args: argparse.Namespace) -> None:
     print(f"{args.kind.title()} keybinding: not assigned")
 
 
-def prepare_bindings(_: argparse.Namespace) -> None:
-    from .store import connect
-
-    with connect() as db:
-        apply_bindings(db, binding_values(db))
-
-
 def install_default_bindings(_: argparse.Namespace) -> None:
-    from .store import connect
+    from .store_core import connect
 
     with connect() as db:
         values = binding_values(db)
         if not values["recordBinding"] and not binding_conflicts("F9", 1):
             values["recordBinding"] = DEFAULT_RECORD_BINDING
             values["recordBindingOverride"] = False
-        if not values["feedBinding"] and not binding_conflicts("F10", 1):
+        if not values["feedBinding"] and not binding_conflicts("F", 69):
             values["feedBinding"] = DEFAULT_FEED_BINDING
             values["feedBindingOverride"] = False
         apply_bindings(db, values)
@@ -397,7 +391,6 @@ def register_binding_parser(commands: argparse._SubParsersAction[argparse.Argume
     binding = commands.add_parser("binding")
     binding_commands = binding.add_subparsers(dest="binding_command", required=True)
     binding_commands.add_parser("install").set_defaults(func=install_default_bindings)
-    binding_commands.add_parser("prepare").set_defaults(func=prepare_bindings)
     binding_commands.add_parser("remove").set_defaults(func=remove_binding_integration)
     for kind in ("record", "feed"):
         binding_kind = binding_commands.add_parser(kind)
@@ -410,7 +403,7 @@ def register_binding_parser(commands: argparse._SubParsersAction[argparse.Argume
 
 
 def remove_binding_integration(_: argparse.Namespace) -> None:
-    from .store import connect, set_setting
+    from .store_core import connect, set_setting
 
     with connect() as db:
         binding_snapshot = _read_snapshot(BINDING_FILE)

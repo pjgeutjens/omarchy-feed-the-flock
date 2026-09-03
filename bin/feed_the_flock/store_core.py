@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import stat
+import sys
 import time
 import uuid
 from collections.abc import Iterator
@@ -15,6 +16,7 @@ from pathlib import Path
 from .common import ATTACHMENT_DIR, DB_PATH, DEFAULT_BUCKETS, STATE_DIR
 
 MAX_NOTE_BYTES = 64 * 1024
+MAX_STATE_BYTES = 8 * 1024 * 1024
 
 
 def checked_note_text(value: str) -> str:
@@ -461,36 +463,35 @@ def state_command(_: argparse.Namespace) -> None:
                 pass
         from .bindings import binding_values
         bindings = binding_values(db, persist_migration=False)
-        print(
-            json.dumps(
-                {
-                    "phase": phase,
-                    **bindings,
-                    "error": setting(db, "error"),
-                    "captureBucketName": capture_bucket_name,
-                    "captureSectionName": capture_section_name,
-                    "activeBucketId": selected,
-                    "activeSectionId": selected_section,
-                    "feedBucketId": feed_bucket_id,
-                    "feedSectionId": feed_section_id,
-                    "feedSectionName": feed_section_row["name"],
-                    "feedBucketName": feed_section_row["bucket_name"],
-                    "nextFeedBucketId": next_feed_bucket_id,
-                    "nextFeedSectionId": next_feed_section_id,
-                    "nextFeedBucketName": next_feed_row["bucket_name"] if next_feed_row else "",
-                    "nextFeedSectionName": next_feed_row["name"] if next_feed_row else "",
-                    "feedQueue": feed_queue,
-                    "deliveryMode": delivery_mode,
-                    "feedEnabled": feed_enabled,
-                    "queueOrder": setting(db, "queue_order", "fifo"),
-                    "pendingCount": active_queue_count,
-                    "buckets": buckets,
-                    "sections": sections,
-                    "notes": notes,
-                    "totalCount": sum(bucket["count"] for bucket in buckets),
-                },
-                ensure_ascii=False,
-            )
-        )
-
-
+        payload = json.dumps(
+            {
+                "phase": phase,
+                **bindings,
+                "error": setting(db, "error"),
+                "captureBucketName": capture_bucket_name,
+                "captureSectionName": capture_section_name,
+                "activeBucketId": selected,
+                "activeSectionId": selected_section,
+                "feedBucketId": feed_bucket_id,
+                "feedSectionId": feed_section_id,
+                "feedSectionName": feed_section_row["name"],
+                "feedBucketName": feed_section_row["bucket_name"],
+                "nextFeedBucketId": next_feed_bucket_id,
+                "nextFeedSectionId": next_feed_section_id,
+                "nextFeedBucketName": next_feed_row["bucket_name"] if next_feed_row else "",
+                "nextFeedSectionName": next_feed_row["name"] if next_feed_row else "",
+                "feedQueue": feed_queue,
+                "deliveryMode": delivery_mode,
+                "feedEnabled": feed_enabled,
+                "queueOrder": setting(db, "queue_order", "fifo"),
+                "pendingCount": active_queue_count,
+                "buckets": buckets,
+                "sections": sections,
+                "notes": notes,
+                "totalCount": sum(bucket["count"] for bucket in buckets),
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        if len(payload) > MAX_STATE_BYTES:
+            raise ValueError("state response exceeds the 8 MB safety limit")
+        sys.stdout.buffer.write(payload + b"\n")

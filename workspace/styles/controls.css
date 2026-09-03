@@ -109,7 +109,10 @@ section.feed-current h2, section.feed-queued h2 { color: var(--accent); }
   color: var(--text); background: color-mix(in srgb, var(--bg) 90%, var(--text));
   font-size: 13px;
 }
-.feed-queue-chip.current { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
+.feed-queue-chip.current { border-style: double; color: var(--text); }
+.feed-queue-chip.current.active {
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent); color: var(--accent);
+}
 .feed-queue-index { color: var(--muted); font-size: 10px; font-weight: 800; }
 .feed-queue-remove {
   border: 0; padding: 0 2px; background: transparent; color: var(--muted);

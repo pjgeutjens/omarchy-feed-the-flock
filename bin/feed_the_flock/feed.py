@@ -21,11 +21,12 @@ from .common import (
     FEED_LOG,
     FEED_RESUME_LOCK,
     HERDR,
+    open_private_log,
     read_regular_file,
     run_bounded,
     run_quiet,
 )
-from .store import (
+from .store_core import (
     active_bucket,
     active_section,
     connect,
@@ -234,8 +235,7 @@ def select_mode(args: argparse.Namespace) -> None:
 def start_feed_worker() -> None:
     if os.environ.get("AGENT_FEED_DISABLE_WORKER") == "1":
         return
-    FEED_LOG.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    log = FEED_LOG.open("ab")
+    log = open_private_log(FEED_LOG)
     subprocess.Popen(
         [sys.executable, str(ENTRYPOINT), "_feed-worker"],
         stdin=subprocess.DEVNULL, stdout=log, stderr=log,
@@ -247,8 +247,7 @@ def start_feed_worker() -> None:
 def start_feed_resume_countdown() -> None:
     if os.environ.get("AGENT_FEED_DISABLE_WORKER") == "1":
         return
-    FEED_LOG.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    log = FEED_LOG.open("ab")
+    log = open_private_log(FEED_LOG)
     subprocess.Popen(
         [sys.executable, str(ENTRYPOINT), "_feed-resume"],
         stdin=subprocess.DEVNULL, stdout=log, stderr=log,
@@ -257,7 +256,13 @@ def start_feed_resume_countdown() -> None:
     log.close()
 
 
-def resume_notification(seconds: int, replace_id: int = 0) -> tuple[subprocess.Popen[bytes] | None, int]:
+def resume_notification_message(seconds: int, destination: str) -> str:
+    return f"Resuming {destination} in {seconds}…\nClick to cancel"
+
+
+def resume_notification(
+    seconds: int, destination: str, replace_id: int = 0,
+) -> tuple[subprocess.Popen[bytes] | None, int]:
     read_fd, write_fd = os.pipe()
     command = [
         "notify-send", "--app-name=Feed the Flock", "--urgency=normal",
@@ -266,7 +271,7 @@ def resume_notification(seconds: int, replace_id: int = 0) -> tuple[subprocess.P
     ]
     if replace_id:
         command.append(f"--replace-id={replace_id}")
-    command.extend(("Feed the Flock", f"Resuming feed worker in {seconds}…\nClick to cancel"))
+    command.extend(("Feed the Flock", resume_notification_message(seconds, destination)))
     try:
         process = subprocess.Popen(
             command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -316,8 +321,17 @@ def feed_resume_countdown(_: argparse.Namespace) -> None:
         with connect() as db:
             deadline = int(setting(db, "feed_resume_after", "0") or "0")
             enabled = setting(db, "feed_enabled", "0") == "1"
+            bucket_id, section_id = feed_destination(db)
+            destination_row = db.execute(
+                "SELECT b.name AS bucket_name, s.name AS section_name "
+                "FROM sections s JOIN buckets b ON b.id = s.bucket_id "
+                "WHERE b.id = ? AND s.id = ?", (bucket_id, section_id),
+            ).fetchone()
         if not enabled or deadline <= int(time.time()):
             return
+        destination = safe_label(
+            f"{destination_row['bucket_name']} / {destination_row['section_name']}", 120,
+        )
         process: subprocess.Popen[bytes] | None = None
         notification_id = 0
         cancelled = False
@@ -336,7 +350,9 @@ def feed_resume_countdown(_: argparse.Namespace) -> None:
                         process.wait(timeout=0.5)
                 if cancelled:
                     break
-            process, notification_id = resume_notification(remaining, notification_id)
+            process, notification_id = resume_notification(
+                remaining, destination, notification_id,
+            )
             for tick in range(10):
                 time.sleep(0.1)
                 if notification_was_cancelled(process):
@@ -368,7 +384,7 @@ def feed_resume_countdown(_: argparse.Namespace) -> None:
             finish_resume_notification(notification_id, "Feed resumption canceled")
         else:
             start_feed_worker()
-            finish_resume_notification(notification_id, "Feed worker resumed")
+            finish_resume_notification(notification_id, f"Feed resumed · {destination}")
 
 
 def select_queue_order(args: argparse.Namespace) -> None:

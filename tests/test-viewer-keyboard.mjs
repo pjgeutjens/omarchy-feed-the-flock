@@ -85,6 +85,101 @@ try {
     'rendered notes'
   );
 
+  assert(await evaluate(`document.querySelector('.feed-queue-chip.current')?.textContent
+    === 'Now · Inbox / Unsorted'`),
+    'current feed destination is not globally identified');
+  assert(await evaluate(`[...document.querySelectorAll('.feed-queue-chip')]
+    .some(chip => chip.textContent.includes('Ideas / Cross bucket queue'))`),
+    'waiting section from another bucket is not visible');
+
+  assert(await evaluate(`document.querySelector('.feed-current .section-handle')?.draggable === true`),
+    'the actively feeding section cannot be dragged');
+  await evaluate(`(() => {
+    const sections = [...document.querySelectorAll('section')];
+    const source = sections.find(section => section.querySelector('h2')?.textContent === 'Unsorted');
+    const target = sections.find(section => section.querySelector('h2')?.textContent === 'Drag last');
+    const transfer = new DataTransfer();
+    source.querySelector('.section-handle').dispatchEvent(new DragEvent('dragstart', {
+      bubbles: true, cancelable: true, dataTransfer: transfer
+    }));
+    const bounds = target.querySelector('.section-heading').getBoundingClientRect();
+    target.querySelector('.section-heading').dispatchEvent(new DragEvent('dragover', {
+      bubbles: true, cancelable: true, clientY: bounds.bottom - 1, dataTransfer: transfer
+    }));
+    window.__sectionDrag = { source, target, transfer };
+  })()`);
+  assert(await evaluate(`window.__sectionDrag.target.classList.contains('section-drop-after')`),
+    'the lower half of a heading did not expose an after drop target');
+  await evaluate(`(() => {
+    const { source, target, transfer } = window.__sectionDrag;
+    const bounds = target.querySelector('.section-heading').getBoundingClientRect();
+    target.querySelector('.section-heading').dispatchEvent(new DragEvent('drop', {
+      bubbles: true, cancelable: true, clientY: bounds.bottom - 1, dataTransfer: transfer
+    }));
+    source.querySelector('.section-handle').dispatchEvent(new DragEvent('dragend', {
+      bubbles: true, cancelable: true, dataTransfer: transfer
+    }));
+  })()`);
+  await waitFor(
+    `[...document.querySelectorAll('section h2')].map(heading => heading.textContent).join('|') === 'Drag middle|Drag last|Unsorted'`,
+    'active section moved after the last heading'
+  );
+
+  await evaluate(`(() => {
+    const sections = [...document.querySelectorAll('section')];
+    const source = sections.find(section => section.querySelector('h2')?.textContent === 'Unsorted');
+    const target = sections.find(section => section.querySelector('h2')?.textContent === 'Drag middle');
+    const transfer = new DataTransfer();
+    source.querySelector('.section-handle').dispatchEvent(new DragEvent('dragstart', {
+      bubbles: true, cancelable: true, dataTransfer: transfer
+    }));
+    const bounds = target.querySelector('.section-heading').getBoundingClientRect();
+    target.querySelector('.section-heading').dispatchEvent(new DragEvent('dragover', {
+      bubbles: true, cancelable: true, clientY: bounds.top + 1, dataTransfer: transfer
+    }));
+    window.__sectionDrag = { source, target, transfer };
+  })()`);
+  assert(await evaluate(`window.__sectionDrag.target.classList.contains('section-drop-before')`),
+    'the upper half of the first heading did not expose a before drop target');
+  await evaluate(`(() => {
+    const { source, target, transfer } = window.__sectionDrag;
+    const bounds = target.querySelector('.section-heading').getBoundingClientRect();
+    target.querySelector('.section-heading').dispatchEvent(new DragEvent('drop', {
+      bubbles: true, cancelable: true, clientY: bounds.top + 1, dataTransfer: transfer
+    }));
+    source.querySelector('.section-handle').dispatchEvent(new DragEvent('dragend', {
+      bubbles: true, cancelable: true, dataTransfer: transfer
+    }));
+  })()`);
+  await waitFor(
+    `[...document.querySelectorAll('section h2')].map(heading => heading.textContent).join('|') === 'Unsorted|Drag middle|Drag last'`,
+    'active section moved before the first heading'
+  );
+
+  await evaluate(`(() => {
+    window.scrollTo(0, 0);
+    document.querySelector('main').style.minHeight = '3000px';
+    const source = [...document.querySelectorAll('section')]
+      .find(section => section.querySelector('h2')?.textContent === 'Unsorted');
+    const transfer = new DataTransfer();
+    source.querySelector('.section-handle').dispatchEvent(new DragEvent('dragstart', {
+      bubbles: true, cancelable: true, dataTransfer: transfer
+    }));
+    document.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true, cancelable: true, clientY: window.innerHeight - 1, dataTransfer: transfer
+    }));
+    window.__autoScrollDrag = { source, transfer };
+  })()`);
+  await waitFor(`window.scrollY > 0`, 'section drag viewport autoscroll');
+  await evaluate(`(() => {
+    const { source, transfer } = window.__autoScrollDrag;
+    source.querySelector('.section-handle').dispatchEvent(new DragEvent('dragend', {
+      bubbles: true, cancelable: true, dataTransfer: transfer
+    }));
+    document.querySelector('main').style.minHeight = '';
+    window.scrollTo(0, 0);
+  })()`);
+
   await press({ key: 'j', code: 'KeyJ', keyCode: 74 });
   assert(await evaluate(`Boolean(document.querySelector('.note.selected'))`),
     'J did not select a note');
@@ -147,6 +242,43 @@ try {
   assert(await evaluate(`window.__noteActionCount === 1`),
     'F did not invoke the selected note action');
 
+  await evaluate(`(() => {
+    window.__imageActionCount = 0;
+    const button = document.querySelector('.note.selected [data-viewer-action="add-image"]');
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.__imageActionCount += 1;
+    }, true);
+  })()`);
+  await press({ key: 'P', code: 'KeyP', keyCode: 80, text: 'P', modifiers: 8 });
+  assert(await evaluate(`window.__imageActionCount === 1`),
+    'P did not invoke add image on the selected note');
+
+  const moveState = await evaluate(`(() => {
+    const selected = document.querySelector('.note.selected');
+    const pending = [...selected.closest('section').querySelectorAll('.note:not(.sent)')]
+      .filter(note => note.checkVisibility());
+    return { selected: selected.dataset.noteId, first: pending[0].dataset.noteId,
+      second: pending[1].dataset.noteId };
+  })()`);
+  assert(moveState.selected === moveState.first && Boolean(moveState.second),
+    'move-key test requires the first of at least two pending notes');
+  await press({ key: 'D', code: 'KeyD', keyCode: 68, text: 'D', modifiers: 8 });
+  await waitFor(
+    `document.querySelector('.note.selected')?.dataset.noteId === '${moveState.selected}'
+      && [...document.querySelector('.note.selected').closest('section').querySelectorAll('.note:not(.sent)')]
+        .filter(note => note.checkVisibility())[0]?.dataset.noteId === '${moveState.second}'`,
+    'D moved the selected note down'
+  );
+  await press({ key: 'U', code: 'KeyU', keyCode: 85, text: 'U', modifiers: 8 });
+  await waitFor(
+    `document.querySelector('.note.selected')?.dataset.noteId === '${moveState.selected}'
+      && [...document.querySelector('.note.selected').closest('section').querySelectorAll('.note:not(.sent)')]
+        .filter(note => note.checkVisibility())[0]?.dataset.noteId === '${moveState.selected}'`,
+    'U moved the selected note up'
+  );
+
   const noteCount = await evaluate(`document.querySelectorAll('.note').length`);
   await press({ key: 'a', code: 'KeyA', keyCode: 65 });
   await waitFor(
@@ -164,6 +296,17 @@ try {
   await press({ key: 'l', code: 'KeyL', keyCode: 76 });
   assert(await evaluate(`Boolean(document.querySelector('section.selected'))`),
     'section selection was unavailable before testing S');
+  const selectedSection = await evaluate(`document.querySelector('section.selected').dataset.sectionId`);
+  await press({ key: 'D', code: 'KeyD', keyCode: 68, text: 'D', modifiers: 8 });
+  await waitFor(
+    `[...document.querySelectorAll('section')].findIndex(section => section.dataset.sectionId === '${selectedSection}') === 1`,
+    'D moved the selected section down'
+  );
+  await press({ key: 'U', code: 'KeyU', keyCode: 85, text: 'U', modifiers: 8 });
+  await waitFor(
+    `[...document.querySelectorAll('section')].findIndex(section => section.dataset.sectionId === '${selectedSection}') === 0`,
+    'U moved the selected section up'
+  );
   assert(await evaluate(`(() => {
     const button = document.querySelector('[data-viewer-action="add-section"]');
     return Boolean(button && !button.disabled && button.checkVisibility());
@@ -174,6 +317,54 @@ try {
   assert(await evaluate(`document.querySelector('#modal-title').textContent === 'Create section'`),
     'S opened the wrong action');
   await press({ key: 'Escape', code: 'Escape', keyCode: 27 });
+
+  await evaluate(`fetch('/api/feed', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'stop' })
+  })`);
+  await command('Page.reload', { ignoreCache: true });
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await waitFor(`document.readyState === 'complete'`, 'viewer reload after stopping feed');
+  await waitFor(`document.querySelector('.feed-queue-chip.current')?.textContent
+    === 'Current · Inbox / Unsorted'`, 'persistent stopped feed destination');
+  assert(await evaluate(`[...document.querySelectorAll('.feed-queue-chip')]
+    .some(chip => chip.textContent.includes('Ideas / Cross bucket queue'))`),
+    'global waiting queue disappeared when the feed stopped');
+
+  await press({ key: 't', code: 'KeyT', keyCode: 84 });
+  await waitFor(`!document.querySelector('#routing-backdrop').hidden`,
+    'routing dialog opened by T');
+  await waitFor(`document.activeElement?.id === 'routing-target'`,
+    'routing target received focus');
+  await press({ key: 'Tab', code: 'Tab', keyCode: 9 });
+  assert(await evaluate(`document.activeElement?.id === 'routing-mode'`),
+    'Tab did not move from target to mode');
+  const routingMode = await evaluate(`document.querySelector('#routing-mode').value`);
+  await press({ key: 'j', code: 'KeyJ', keyCode: 74, text: 'j' });
+  assert(await evaluate(`document.querySelector('#routing-mode').value !== '${routingMode}'`),
+    'J did not change the focused routing choice');
+  await press({ key: 'Enter', code: 'Enter', keyCode: 13 });
+  await waitFor(`document.querySelector('#routing-backdrop').hidden`,
+    'Enter did not apply and close routing');
+
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 900, height: 480, deviceScaleFactor: 1, mobile: false
+  });
+  await press({ key: '?', code: 'Slash', keyCode: 191, text: '?', modifiers: 8 });
+  await waitFor(`!document.querySelector('#modal-backdrop').hidden`,
+    'keyboard reference opened by ?');
+  assert(await evaluate(`(() => {
+    const card = document.querySelector('#modal-card');
+    const bounds = card.getBoundingClientRect();
+    const style = getComputedStyle(card);
+    return bounds.top >= 0 && bounds.bottom <= window.innerHeight
+      && style.overflowY === 'auto' && card.scrollHeight > card.clientHeight;
+  })()`), 'keyboard reference is not viewport-bounded and scrollable');
+  assert(await evaluate(`parseFloat(getComputedStyle(
+    document.querySelector('#modal-message')).fontSize) <= 13`),
+    'keyboard reference did not use compact text');
+  await press({ key: 'Escape', code: 'Escape', keyCode: 27 });
+  await command('Emulation.clearDeviceMetricsOverride');
 } finally {
   socket.close();
 }

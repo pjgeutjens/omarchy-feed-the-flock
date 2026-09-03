@@ -28,7 +28,6 @@ BarWidget {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
   onBarChanged: root.injectPanel()
-  Component.onCompleted: resumeFeedProcess.running = true
 
   Loader {
     id: panelLoader
@@ -39,12 +38,6 @@ BarWidget {
       root.injectPanel()
       Qt.callLater(root.injectPanel)
     }
-  }
-
-  Process {
-    id: resumeFeedProcess
-    running: false
-    command: [AgentFeedCore.AgentFeedState.commandPath, "feed", "resume"]
   }
 
   IpcHandler {

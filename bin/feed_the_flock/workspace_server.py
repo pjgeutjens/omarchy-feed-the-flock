@@ -24,14 +24,11 @@ from .common import (
 )
 from .feed import configure_routing, deliver_note, feed_control, targets_payload
 from .store import (
-    active_bucket,
     add_bucket,
     add_feed_section_queue,
     add_note_to_db,
     add_section,
-    checked_note_text,
     clear_section_notes,
-    connect,
     delete_bucket,
     delete_section,
     move_bucket,
@@ -43,6 +40,13 @@ from .store import (
     select_feed_section,
     select_feed_section_now,
     set_note_sent,
+)
+from .store_core import (
+    active_bucket,
+    checked_note_text,
+    connect,
+    remove_note_attachments,
+    unlink_attachment_files,
 )
 from .workspace_content import (
     IMAGE_TYPES,
@@ -284,7 +288,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     path, _, _ = attachment_file(db, attachment_id)
                     db.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
                     db.commit()
-                path.unlink(missing_ok=True)
+                unlink_attachment_files([path])
                 self.json_response(200, {"ok": True})
                 return
             if parsed.path == "/api/routing":
@@ -424,12 +428,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     ).fetchone()
                     if not row:
                         raise ValueError("note no longer exists")
-                    attachment_paths = [
-                        Path(item[0]) for item in db.execute(
-                            "SELECT file_path FROM attachments WHERE note_id = ?", (note_id,)
-                        )
-                    ]
-                    db.execute("DELETE FROM attachments WHERE note_id = ?", (note_id,))
+                    attachment_paths = remove_note_attachments(db, [note_id])
                     db.execute("DELETE FROM feed_queue WHERE note_id = ?", (note_id,))
                     db.execute("DELETE FROM notes WHERE id = ?", (note_id,))
                     db.execute(
@@ -437,8 +436,7 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                         (row["section_id"], row["position"]),
                     )
                     db.commit()
-                    for attachment_path in attachment_paths:
-                        attachment_path.unlink(missing_ok=True)
+                    unlink_attachment_files(attachment_paths)
                     self.json_response(200, {"ok": True})
                     return
                 if parsed.path == "/api/note/update":

@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "id": "io.github.pjgeutjens.agentfeed",
   "name": "Feed the Flock",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "author": "Pieter Geutjens",
   "license": "MIT",
-  "description": "Capture and arrange voice notes before feeding them to an agent session.",
+  "description": "Capture, arrange, and feed notes to Herdr agent sessions.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Feed the Flock",
-    "description": "Capture voice notes into ordered topic buckets.",
+    "description": "Capture, organize, and deliver transient notes.",
     "category": "AI",
     "aliases": ["voice", "notes", "agents", "inbox"],
     "allowMultiple": false,

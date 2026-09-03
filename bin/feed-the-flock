@@ -24,7 +24,6 @@ from feed_the_flock.store import (
     add_feed_section_queue,
     add_note,
     add_section,
-    connect,
     clear_section,
     delete_bucket,
     delete_note,
@@ -43,10 +42,9 @@ from feed_the_flock.store import (
     select_feed_section_now,
     select_section,
     set_note_sent,
-    set_setting,
-    state_command,
     update_note,
 )
+from feed_the_flock.store_core import connect, set_setting, state_command
 from feed_the_flock.workspace import (
     export_markdown_bucket,
     import_markdown_bucket,

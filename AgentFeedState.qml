@@ -225,7 +225,6 @@ Item {
   function startRecording() { return root.runAction(["record", "start"]) }
   function stopRecording() { return root.runAction(["record", "stop"]) }
   function cancelRecording() { return root.runAction(["record", "cancel"]) }
-  function prepareBindings() { return root.runAction(["binding", "prepare"]) }
   function setBinding(mode, shortcut, overrideExisting) {
     var kind = mode === "feed" ? "feed" : "record"
     var arguments = ["binding", kind, "set", String(shortcut)]

@@ -1,90 +1,61 @@
 # Workspace architecture
 
-This directory is the dependency-free HTML viewer for Feed the Flock. It is served directly by `bin/feed_the_flock/workspace.py`; there is no bundler, package manager, framework, or generated output.
+This directory contains the dependency-free browser workspace. The Python server sends these files directly; there is no build output or package-manager state in this directory.
 
-## Find the right file
+## File map
 
 | Concern | File |
 | --- | --- |
-| Semantic document shell and accessibility labels | `index.html` |
-| Theme variables and global typography | `styles/theme.css` |
-| Sticky bucket, target, queue, and status controls | `styles/controls.css` |
-| Toast and modal presentation | `styles/overlays.css` |
-| Section cards, active queue timeline, and section actions | `styles/document.css` |
-| Note rows, editing, delivery actions, and drag handles | `styles/notes.css` |
-| Narrow-screen adaptations | `styles/responsive.css` |
-| API transport and HTTP error handling | `js/api.js` |
-| Accessible modal behavior and focus trapping | `js/modal.js` |
-| Atomic target, mode, and order routing dialog | `js/routing.js` |
-| Omarchy color loading | `js/theme.js` |
-| Workspace state, controls, rendering, drag/drop, and live refresh | `js/app.js` |
-| JSON endpoints, SQLite mutations, SSE, and static serving | `../bin/feed_the_flock/workspace.py` |
+| Document shell and accessibility labels | `index.html` |
+| App state, rendering coordination, and live refresh | `js/app.js` |
+| Note rows, note actions, and note drag/drop | `js/note-view.js` |
+| Section rows, section actions, and section drag/drop | `js/section-view.js` |
+| Keyboard selection, search, and action dispatch | `js/viewer-navigation.js` |
+| Inline note edit lifecycle | `js/note-editor.js` |
+| Attachment file handling | `js/attachments.js` |
+| Delivery-routing dialog | `js/routing.js` |
+| Shared modal and API helpers | `js/modal.js`, `js/api.js` |
+| Viewport scrolling during section drag | `js/drag-autoscroll.js` |
+| Omarchy theme loading | `js/theme.js`, `styles/theme.css` |
+| Controls, document, notes, and overlays | `styles/*.css` |
+| Workspace launcher | `../bin/feed_the_flock/workspace.py` |
+| Document payloads, Markdown, and attachments | `../bin/feed_the_flock/workspace_content.py` |
+| HTTP routes, SSE, and static files | `../bin/feed_the_flock/workspace_server.py` |
 
-Start with `js/app.js` when changing behavior. Its main render boundaries are `noteElement`, `sectionElement`, `renderFeedQueue`, and `load`. Keep API transport in `api.js` and modal mechanics in `modal.js` rather than duplicating them.
+`js/app.js` owns browser state and composes the smaller modules. Put note behavior in `note-view.js`, section behavior in `section-view.js`, and keyboard behavior in `viewer-navigation.js`. Keep database and filesystem mutations in Python.
 
 ## Data flow
 
-1. SQLite is canonical.
-2. `workspace.py` returns bucket documents from `GET /api/bucket?id=…`.
-3. `app.js` renders the returned bucket, sections, notes, feed destination, and section queue.
-4. Mutations use the `/api/bucket/*`, `/api/section/*`, `/api/note/*`, and `/api/deliver` endpoints.
-5. `/api/events` emits an SSE `change` event after SQLite changes; the viewer reloads its document.
-6. `/api/theme` maps the active Omarchy theme into CSS variables.
+1. SQLite is the source of truth.
+2. The workspace requests a bucket document from `GET /api/bucket?id=...`.
+3. `app.js` renders sections through `section-view.js`, which renders notes through `note-view.js`.
+4. Mutations go through `/api/*` routes and reload their result from SQLite.
+5. `/api/events` emits an SSE change event after stored data changes.
 
-The important section fields are `feedCurrent` (persisted selection), `feedActive` (currently running), `feedQueuePosition`, `feedLabel`, and `notes`. Notes expose `sent`, `active`, `jumpedQueue`, `deliveredAt`, `deliverySequence`, and an ordered `attachments` list in addition to their ID and text. Attachment records provide `id`, `name`, `mimeType`, and a local authenticated-by-loopback `url`.
+Browser state is disposable. The database, managed attachments, logs, and Chromium profile belong under `~/.local/state/agent-feed`, outside this source tree.
 
-## Product invariants
+## Product rules
 
-- SQLite remains the source of truth; browser state is disposable.
-- Markdown export uses `#` bucket titles, `##` section titles, and task-list notes (`[ ]` pending, `[x]` submitted). Import creates a new bucket and never replaces an existing one.
-- Left-clicking a note copies it. Delivery requires an explicit Feed Now action.
-- Notes may have up to five managed image attachments; never render full images inline.
-- Every note reserves four control/status slots so text always starts in one column; up to five attachment icons appear at the end of the text area.
-- Multiple attachments retain their order and are pasted into the target before note text is submitted.
-- Attachment delivery must fail visibly if clipboard setup or Herdr key injection fails; never silently omit images.
-- Pending notes expose Feed Now and Delete. Submitted notes expose Requeue and Delete.
-- Only pending notes can be dragged or reordered. Submitted notes retain immutable delivery-sequence order until requeued.
-- A delivered note or batch remains Active while its Herdr target is working, then becomes ordinary submitted history when the target returns to idle or done.
-- There is no manual Mark Sent action.
-- Enter submits edits, Shift+Enter inserts a newline, and Escape restores the saved value.
-- Escape must restore the editor’s explicit canonical original before blur; cancelling a provisional “New note” deletes it instead of persisting the placeholder.
-- Live SSE refreshes must preserve the active editor’s draft, selection, and focus while showing externally captured notes.
-- A bucket always retains its undeletable fallback section.
-- Deleting another section must explicitly choose moving notes to the fallback or discarding them.
-- Clearing retains the section but requires its exact name, removes all pending and submitted notes, and unlinks only attachment files managed inside the attachment directory.
-- A section is promoted visually only while its feed is active; after draining it returns to document order.
-- Starting from the viewer targets the visible bucket without changing the compact panel's browsing selection.
-- Workspace routing changes require an explicit Apply, update target/mode/order atomically, and are rejected while feeding is active.
-- FIFO/LIFO order is provided by the backend and must not be reconstructed differently in the browser.
-- Use specific component selectors such as `.section-action.feed-now` or `.note-action.feed-now`; avoid broad class selectors that can collide.
-
-## Common changes
-
-- **Change colors or typography:** edit `styles/theme.css`; preserve the CSS variables populated by `js/theme.js`.
-- **Change sticky controls:** edit `index.html`, `styles/controls.css`, and the control bindings near the top of `js/app.js`. Feed Start/Stop uses `viewerFeedSection` and `POST /api/feed`.
-- **Change a note or attachment UI:** edit `noteElement`, `uploadAttachment`, and `uploadAttachments` in `js/app.js`, plus `styles/notes.css`.
-- **Change a section or queue timeline:** edit `sectionElement` in `js/app.js` and `styles/document.css`.
-- **Add an operation:** add the endpoint in `workspace.py`, call it through `request()` from `js/api.js`, then reload from SQLite rather than assuming the mutation succeeded locally.
-- **Add a dialog:** use `requestText` or `requestConfirmation` from `js/modal.js`.
+- A bucket always has an undeletable fallback section.
+- Only pending notes can move. Submitted notes keep delivery order until requeued.
+- FIFO and LIFO come from the backend; the browser does not reconstruct queue order.
+- Live refresh keeps the active editor draft, selection, and focus.
+- Routing changes apply together and only while the feed is stopped.
+- The current feed destination and waiting section queue are global, even while another bucket is open.
+- Note text and names are untrusted plain text. Do not insert them with `innerHTML`.
+- Attachment paths must remain inside the managed attachment directory.
 
 ## Installation and customization
 
-`scripts/install-workspace.py` records shipped SHA-256 hashes in `~/.local/state/agent-feed/workspace-assets.json`. On a later install:
+`scripts/install-workspace.py` records hashes in `~/.local/state/agent-feed/workspace-assets.json`. On update:
 
-- unchanged shipped files update automatically;
-- locally modified installed files are preserved;
-- the new shipped copy is written beside a conflict as `<name>.upstream`;
-- the installer prints every preserved path.
+- unchanged built-in files receive the new release;
+- edited built-in files remain in place and get a neighboring `.upstream` copy;
+- user-created files remain untouched;
+- files removed from the release are deleted only when the installed copy is unchanged.
 
-An agent can then compare the customized file with its `.upstream` counterpart and merge deliberately. Source-tree changes made in this repository are normal shipped changes and are installed when the installed copy still matches its previous hash.
+Do not replace this installer with a directory-wide copy or cleanup. `tests/test-workspace-install.sh` enforces these rules.
 
-## Validation
+## Checks
 
-Run:
-
-```sh
-./scripts/validate.sh
-./scripts/install-local.sh
-```
-
-Validation checks Python, QML, CLI behavior, and JavaScript module syntax. After installation, open the workspace and test copying, editing/cancelling, section deletion choices, drag/drop, Feed Now, queue promotion, and live updates.
+Run `./scripts/validate.sh` from the repository root. It checks QML and source syntax, module-size limits, CLI behavior, workspace APIs, browser keyboard behavior, attachment safety, update preservation, and QML presentation.

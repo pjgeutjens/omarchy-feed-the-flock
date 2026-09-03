@@ -34,7 +34,7 @@ Column {
     value: AgentFeedCore.AgentFeedState.selectedDeliveryTargetId
     options: Presentation.targetDropdownOptions(AgentFeedCore.AgentFeedState.deliveryTargets)
     triggerLabel: AgentFeedCore.AgentFeedState.selectedDeliveryTargetLabel
-    placeholderText: "Filter Herdr targets..."
+    placeholderText: "Filter targets…  ↓ results"
     popupRowHeight: Style.space(42)
     foreground: root.foreground
     fontFamily: root.fontFamily

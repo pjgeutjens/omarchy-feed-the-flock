@@ -124,8 +124,6 @@ Panel {
     root.notesOpen = false
     keybindingsOverlay.reset()
     root.bindingsOpen = true
-    if (!AgentFeedCore.AgentFeedState.bindingsInstalled)
-      AgentFeedCore.AgentFeedState.prepareBindings()
     bindingsOverlay.open()
   }
 

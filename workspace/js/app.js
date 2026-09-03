@@ -216,13 +216,15 @@ async function loadTargets() {
   }
 }
 
-targetNameEl.addEventListener('click', () => openRouting({
-  onApplied: async () => {
+function openRoutingDialog() {
+  return openRouting({ onApplied: async () => {
     await loadTargets();
     await load();
     showToast('Routing updated');
-  }
-}));
+  }});
+}
+
+targetNameEl.addEventListener('click', openRoutingDialog);
 
 const noteEditor = createNoteEditor({ setStatus });
 
@@ -250,7 +252,10 @@ const navigation = createViewerNavigation({
   createNote,
   exportBucket,
   importBucket,
+  moveNote,
+  moveSection,
   noteEditor,
+  openRouting: openRoutingDialog,
   search: {
     container: viewerSearchEl,
     input: viewerSearchInputEl,
@@ -343,16 +348,11 @@ feedToggleEl.addEventListener('click', async () => {
 });
 
 function renderFeedQueue(data) {
-  const children = [];
-  if (data.feedEnabled) {
-    const current = document.createElement('span');
-    current.className = 'feed-queue-chip current';
-    current.textContent = data.feedBucketId === data.id
-      ? `Now · ${data.feedSectionName}`
-      : `Now · ${data.feedBucketName} / ${data.feedSectionName}`;
-    current.title = `${data.feedBucketName} / ${data.feedSectionName}`;
-    children.push(current);
-  }
+  const current = document.createElement('span');
+  current.className = `feed-queue-chip current${data.feedEnabled ? ' active' : ''}`;
+  current.textContent = `${data.feedEnabled ? 'Now' : 'Current'} · ${data.feedBucketName} / ${data.feedSectionName}`;
+  current.title = `${data.feedEnabled ? 'Currently feeding' : 'Current feed destination'} · ${data.feedBucketName} / ${data.feedSectionName}`;
+  const children = [current];
   const queue = data.feedQueue || [];
   queue.forEach((item, index) => {
     const chip = document.createElement('span');
@@ -361,8 +361,7 @@ function renderFeedQueue(data) {
     position.className = 'feed-queue-index';
     position.textContent = String(index + 1);
     const label = document.createElement('span');
-    label.textContent = item.bucketId === data.id
-      ? item.sectionName : `${item.bucketName} / ${item.sectionName}`;
+    label.textContent = `${item.bucketName} / ${item.sectionName}`;
     label.title = `${item.bucketName} / ${item.sectionName}`;
     const remove = document.createElement('button');
     remove.className = 'feed-queue-remove';

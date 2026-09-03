@@ -1,4 +1,5 @@
 import { request } from './api.js';
+import { createViewportDragScroller } from './drag-autoscroll.js';
 import { requestText, showModal } from './modal.js';
 
 export function createSectionRenderer({
@@ -15,6 +16,18 @@ export function createSectionRenderer({
   showToast,
 }) {
   let showSubmitted = localStorage.getItem('agent-feed-show-submitted') !== 'false';
+  const dragScroller = createViewportDragScroller();
+
+  document.addEventListener('dragover', event => {
+    if (dragState.sectionId) dragScroller.update(event.clientY);
+  });
+  document.addEventListener('drop', dragScroller.stop);
+  document.addEventListener('dragend', dragScroller.stop, true);
+
+  function clearSectionDropTargets() {
+    document.querySelectorAll('.section-drop-before, .section-drop-after').forEach(element =>
+      element.classList.remove('section-drop-before', 'section-drop-after'));
+  }
 
   function sectionElement(section) {
     const sectionEl = document.createElement('section');
@@ -29,9 +42,8 @@ export function createSectionRenderer({
     const sectionHandle = document.createElement('button');
     sectionHandle.className = 'section-handle';
     sectionHandle.type = 'button';
-    sectionHandle.draggable = !section.feedCurrent && section.feedQueuePosition < 0;
-    sectionHandle.title = section.feedCurrent || section.feedQueuePosition >= 0
-      ? 'Pinned while part of the active feed queue' : 'Drag section';
+    sectionHandle.draggable = true;
+    sectionHandle.title = 'Drag section';
     sectionHandle.setAttribute('aria-label', 'Drag section');
     sectionHandle.textContent = '⠿';
     sectionHandle.addEventListener('dragstart', event => {
@@ -41,8 +53,8 @@ export function createSectionRenderer({
     });
     sectionHandle.addEventListener('dragend', () => {
       dragState.sectionId = null;
-      document.querySelectorAll('.section-drop').forEach(element =>
-        element.classList.remove('section-drop'));
+      dragScroller.stop();
+      clearSectionDropTargets();
     });
 
     const heading = document.createElement('h2');
@@ -257,22 +269,31 @@ export function createSectionRenderer({
       section.notes.forEach(note => notes.append(noteElement(note, section.id)));
     }
 
-    sectionEl.addEventListener('dragover', event => {
-      if (!dragState.sectionId) return;
+    headingRow.addEventListener('dragover', event => {
+      if (!dragState.sectionId || dragState.sectionId === section.id) return;
       event.preventDefault();
-      sectionEl.classList.add('section-drop');
+      event.dataTransfer.dropEffect = 'move';
+      const bounds = headingRow.getBoundingClientRect();
+      const after = event.clientY >= bounds.top + bounds.height / 2;
+      clearSectionDropTargets();
+      sectionEl.classList.toggle('section-drop-before', !after);
+      sectionEl.classList.toggle('section-drop-after', after);
     });
-    sectionEl.addEventListener('dragleave', event => {
-      if (!sectionEl.contains(event.relatedTarget)) sectionEl.classList.remove('section-drop');
+    headingRow.addEventListener('dragleave', event => {
+      if (!headingRow.contains(event.relatedTarget)) clearSectionDropTargets();
     });
-    sectionEl.addEventListener('drop', event => {
-      if (!dragState.sectionId) return;
+    headingRow.addEventListener('drop', event => {
+      if (!dragState.sectionId || dragState.sectionId === section.id) return;
       event.preventDefault();
       event.stopPropagation();
-      const after = event.clientY >= sectionEl.getBoundingClientRect().top
-        + sectionEl.offsetHeight / 2;
-      const next = after ? sectionEl.nextElementSibling : sectionEl;
-      moveSection(dragState.sectionId, next?.dataset.sectionId || null);
+      const after = sectionEl.classList.contains('section-drop-after');
+      let next = after ? sectionEl.nextElementSibling : sectionEl;
+      while (next && (!next.dataset.sectionId || next.dataset.sectionId === dragState.sectionId)) {
+        next = next.nextElementSibling;
+      }
+      const draggedSectionId = dragState.sectionId;
+      clearSectionDropTargets();
+      moveSection(draggedSectionId, next?.dataset.sectionId || null);
     });
 
     notes.addEventListener('dragover', event => {

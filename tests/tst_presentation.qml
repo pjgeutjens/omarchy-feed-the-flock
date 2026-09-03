@@ -19,7 +19,7 @@ TestCase {
     compare(targets.length, 1)
     compare(targets[0].value, "herdr:w1:p2")
     compare(targets[0].label, "pi · project")
-    compare(targets[0].description, "Herdr · idle")
+    compare(targets[0].description, "idle")
 
     var modes = Presentation.hintedDropdownOptions([
       { "id": "fifo", "label": "FIFO", "hint": "oldest pending first" }

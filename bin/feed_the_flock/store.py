@@ -2,17 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sqlite3
-import stat
 import time
 import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 
-from .common import ATTACHMENT_DIR, DB_PATH, DEFAULT_BUCKETS, STATE_DIR
 from .store_core import (
     active_bucket,
     active_section,
@@ -21,16 +16,10 @@ from .store_core import (
     ensure_unsorted_section,
     feed_destination,
     feed_section_queue,
-    next_feed_destination,
-    normalized_phase,
-    promote_next_feed_section,
     remove_note_attachments,
-    set_phase,
     set_setting,
     setting,
-    state_command,
     unlink_attachment_files,
-    unsorted_section_id,
 )
 
 

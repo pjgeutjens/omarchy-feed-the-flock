@@ -11,12 +11,13 @@ import uuid
 from pathlib import Path
 
 from .common import (
-    CAPTURE_DIR, ENTRYPOINT, LOG_PATH, VOXTYPE, read_regular_file, run_bounded, run_quiet,
+    CAPTURE_DIR, ENTRYPOINT, LOG_PATH, VOXTYPE, open_private_log, read_regular_file,
+    run_bounded, run_quiet,
 )
-from .store import (
+from .store import add_note_to_db
+from .store_core import (
     active_bucket,
     active_section,
-    add_note_to_db,
     connect,
     normalized_phase,
     set_phase,
@@ -97,8 +98,7 @@ def record_stop(_: argparse.Namespace) -> None:
         set_phase(db, "transcribing")
         db.commit()
 
-    LOG_PATH.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    log = LOG_PATH.open("ab")
+    log = open_private_log(LOG_PATH)
     subprocess.Popen(
         [
             sys.executable, str(ENTRYPOINT), "_finalize",
@@ -115,8 +115,8 @@ def record_stop(_: argparse.Namespace) -> None:
 
 def record_cancel(_: argparse.Namespace) -> None:
     with connect() as db:
-        if normalized_phase(db) != "recording":
-            raise SystemExit("feed-the-flock: no recording is active")
+        if normalized_phase(db) not in {"recording", "transcribing"}:
+            raise SystemExit("feed-the-flock: no capture is active")
         capture = load_capture(db)
         try:
             run_quiet([VOXTYPE, "record", "cancel"], timeout=10)
@@ -136,6 +136,13 @@ def finalize(args: argparse.Namespace) -> None:
 
     idle_since: float | None = None
     for _ in range(480):
+        with connect() as db:
+            try:
+                active_capture = json.loads(setting(db, "active_capture", "{}"))
+            except json.JSONDecodeError:
+                active_capture = {}
+            if str(active_capture.get("path", "")) != str(capture):
+                return
         status = voxtype_class()
         if status == "idle":
             try:
@@ -151,6 +158,12 @@ def finalize(args: argparse.Namespace) -> None:
                 text = capture_bytes.decode("utf-8", errors="replace").strip()
                 if text:
                     with connect() as db:
+                        try:
+                            active_capture = json.loads(setting(db, "active_capture", "{}"))
+                        except json.JSONDecodeError:
+                            active_capture = {}
+                        if str(active_capture.get("path", "")) != str(capture):
+                            return
                         section_exists = db.execute(
                             "SELECT 1 FROM sections WHERE id = ? AND bucket_id = ?",
                             (args.section_id, args.bucket_id),
@@ -175,4 +188,3 @@ def finalize(args: argparse.Namespace) -> None:
     with connect() as db:
         set_setting(db, "active_capture", "")
         set_phase(db, "error", f"No completed transcription arrived. Capture retained at {capture}")
-

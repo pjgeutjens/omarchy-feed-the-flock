@@ -6,7 +6,10 @@ export function createViewerNavigation({
   createNote,
   exportBucket,
   importBucket,
+  moveNote,
+  moveSection,
   noteEditor,
+  openRouting,
   search,
 }) {
   let selectedNoteId = '';
@@ -100,6 +103,34 @@ export function createViewerNavigation({
     return section?.querySelector('.note:not(.sent)')?.dataset.noteId || null;
   }
 
+  function moveSelectedNote(note, direction) {
+    if (note.classList.contains('sent')) return false;
+    const section = note.closest('section');
+    const notes = [...(section?.querySelectorAll('.note:not(.sent)') || [])]
+      .filter(candidate => candidate.checkVisibility());
+    const current = notes.indexOf(note);
+    const destination = current + direction;
+    if (!section || current < 0 || destination < 0 || destination >= notes.length) return true;
+    const beforeNoteId = direction < 0
+      ? notes[destination].dataset.noteId
+      : notes[current + 2]?.dataset.noteId || null;
+    moveNote(note.dataset.noteId, section.dataset.sectionId, beforeNoteId);
+    return true;
+  }
+
+  function moveSelectedSection(section, direction) {
+    const sections = [...document.querySelectorAll('main section')]
+      .filter(candidate => candidate.checkVisibility());
+    const current = sections.indexOf(section);
+    const destination = current + direction;
+    if (current < 0 || destination < 0 || destination >= sections.length) return true;
+    const beforeSectionId = direction < 0
+      ? sections[destination].dataset.sectionId
+      : sections[current + 2]?.dataset.sectionId || null;
+    moveSection(section.dataset.sectionId, beforeSectionId);
+    return true;
+  }
+
   function triggerSelectedAction(key, rawKey) {
     if (key === 's') return clickSelectedAction(document, 'add-section');
 
@@ -124,12 +155,16 @@ export function createViewerNavigation({
         createNote(sectionId, before);
         return true;
       }
-      const action = { f: 'feed', r: 'requeue', delete: 'delete' }[key];
+      if (key === 'u' || key === 'd') return moveSelectedNote(note, key === 'u' ? -1 : 1);
+      const action = { p: 'add-image', f: 'feed', r: 'requeue', delete: 'delete' }[key];
       return action ? clickSelectedAction(note, action) : false;
     }
 
     const section = document.querySelector('section.selected');
     if (!section) return false;
+    if (key === 'u' || key === 'd') {
+      return moveSelectedSection(section, key === 'u' ? -1 : 1);
+    }
     if (key === 'a' || key === 'o') {
       createNote(section.dataset.sectionId, rawKey === 'O' ? firstPendingNoteId(section) : null);
       return true;
@@ -192,8 +227,9 @@ export function createViewerNavigation({
   function showKeyboardReference() {
     showModal({
       title: 'Keyboard shortcuts',
-      message: 'SELECT\nJ / K  Previous / next note\nH / L  Previous / next section\n\nADD\nA  Add note at end of selected note’s section\no / O  Add note after / before the selected note\nS  Add section\n\nSELECTED NOTE\nF  Feed now\nR  Requeue submitted note\nDelete  Delete note\nEnter  Edit note\nY  Copy note\n\nSELECTED SECTION\nQ  Add to feed queue\nF  Feed now\nR  Rename\nC  Clear\nDelete  Delete section\n\nGLOBAL\n/  Search headings and notes\nI  Import Markdown bucket\nX  Export current bucket\n?  Open this reference\nEsc  Close search or dialog',
-      confirmLabel: 'Close'
+      message: 'SELECT\nJ / K  Previous / next note\nH / L  Previous / next section\n\nADD\nA  Add note at end of selected note’s section\no / O  Add note after / before the selected note\nS  Add section\n\nSELECTED NOTE\nU / D  Move note up / down\nP  Add image\nF  Feed now\nR  Requeue submitted note\nDelete  Delete note\nEnter  Edit note\nY  Copy note\n\nSELECTED SECTION\nU / D  Move section up / down\nQ  Add to feed queue\nF  Feed now\nR  Rename\nC  Clear\nDelete  Delete section\n\nROUTING\nT  Open delivery routing\nJ / K or ↑ / ↓  Change focused choice\nTab / Shift+Tab  Next / previous field\nEnter  Apply routing\nEsc  Cancel routing\n\nGLOBAL\n/  Search headings and notes\nI  Import Markdown bucket\nX  Export current bucket\n?  Open this reference\nEsc  Close search or dialog',
+      confirmLabel: 'Close',
+      messageClass: 'keyboard-reference'
     });
   }
 
@@ -252,6 +288,9 @@ export function createViewerNavigation({
       handled = true;
     } else if (event.key === '?') {
       showKeyboardReference();
+      handled = true;
+    } else if (key === 't') {
+      openRouting();
       handled = true;
     } else handled = triggerSelectedAction(key, event.key);
     if (!handled) return;

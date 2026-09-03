@@ -15,9 +15,10 @@ from .common import (
     WORKSPACE_HTML,
     WORKSPACE_LOG,
     WORKSPACE_PORT,
+    open_private_log,
     read_regular_file,
 )
-from .store import active_bucket, connect
+from .store_core import active_bucket, connect
 from .workspace_content import (
     export_markdown_bucket,
     image_dimensions,
@@ -59,8 +60,7 @@ def workspace_bucket(args: argparse.Namespace) -> None:
         with socket.create_connection((WORKSPACE_HOST, WORKSPACE_PORT), timeout=0.2):
             pass
     except OSError:
-        WORKSPACE_LOG.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        log = WORKSPACE_LOG.open("ab")
+        log = open_private_log(WORKSPACE_LOG)
         subprocess.Popen(
             [sys.executable, str(ENTRYPOINT), "_workspace-serve"],
             stdin=subprocess.DEVNULL, stdout=log, stderr=log,

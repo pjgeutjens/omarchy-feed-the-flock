@@ -35,9 +35,9 @@ from .common import (
     run_bounded,
     run_quiet,
 )
-from .store import (
+from .store import add_note_to_db
+from .store_core import (
     active_bucket,
-    add_note_to_db,
     connect,
     ensure_unsorted_section,
     feed_destination,
@@ -482,14 +482,6 @@ def bucket_document(db: sqlite3.Connection, bucket_id: str) -> dict[str, object]
         "SELECT id, name, system_kind, position FROM sections "
         "WHERE bucket_id = ? ORDER BY position, name", (bucket_id,)
     ).fetchall()
-    if feed_enabled:
-        section_rows = sorted(
-            section_rows,
-            key=lambda row: (
-                -1 if row["id"] == feed_section_id else queue_positions.get(row["id"], 100000),
-                row["position"],
-            ),
-        )
     for section in section_rows:
         notes = [
             {
@@ -601,5 +593,3 @@ def place_note_in_section(
             "UPDATE notes SET section_id = ?, position = ? WHERE id = ?",
             (section_id, position, current_id),
         )
-
-

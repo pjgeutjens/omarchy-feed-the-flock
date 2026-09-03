@@ -38,6 +38,18 @@ cli="$root/bin/feed-the-flock"
   .recordBinding == "" and .feedBinding == "" and .bindingsInstalled == true
 ' >/dev/null
 
+# Fresh installs use the mnemonic feed toggle only when the chord is free.
+"$cli" binding install >/dev/null
+"$cli" state | jq -e '
+  .recordBinding == "SHIFT + F9"
+  and .feedBinding == "SUPER + CTRL + SHIFT + F"
+  and .feedBindingOverride == false
+' >/dev/null
+grep -Fq 'o.bind("SUPER + CTRL + SHIFT + F", "Toggle Feed the Flock delivery"' \
+  "$tmp/hypr/agent-feed-bindings.lua"
+"$cli" binding record clear >/dev/null
+"$cli" binding feed clear >/dev/null
+
 "$cli" binding record set 'SUPER + F8' >/dev/null
 "$cli" binding feed set 'CTRL + SHIFT + F8' >/dev/null
 "$cli" state | jq -e '

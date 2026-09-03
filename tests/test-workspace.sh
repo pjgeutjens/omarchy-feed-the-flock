@@ -129,7 +129,11 @@ curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "['j', 'k'].
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "['h', 'l'].includes(key)"
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'function triggerSelectedAction(key, rawKey)'
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "if (key === 'a' || key === 'o')"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "p: 'add-image'"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "key === 'u' || key === 'd'"
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "key === 's'"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "key === 't'"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'function moveSelectedSection'
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'event.stopImmediatePropagation();'
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "event.key === '/'"
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "event.key === '?'"
@@ -137,6 +141,63 @@ curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'if (!contai
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'function recoverSearchFocus(event)'
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'input.setRangeText(event.key'
 curl -fsS http://127.0.0.1:47832/js/routing.js | grep -Fq "request('/api/routing'"
+curl -fsS http://127.0.0.1:47832/js/routing.js | grep -Fq "event.key === 'Enter' && !apply.disabled"
+curl -fsS http://127.0.0.1:47832/js/section-view.js | grep -Fq 'createViewportDragScroller'
+curl -fsS http://127.0.0.1:47832/js/drag-autoscroll.js | grep -Fq 'window.scrollBy'
+
+# Corrupted attachment rows must never make workspace deletion unlink files
+# outside Feed the Flock's managed attachment directory.
+external_file="$tmp/must-survive.txt"
+printf 'outside managed attachments' >"$external_file"
+"$cli" note add 'Delete route attachment guard'
+guard_note_id=$("$cli" state | jq -r '.notes[] | select(.text == "Delete route attachment guard") | .id')
+sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" <<SQL
+INSERT INTO attachments VALUES (
+  'unsafe-note-attachment', '$guard_note_id', 'outside.txt', 'image/png', '$external_file', 0, 1
+);
+SQL
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$guard_note_id" '{id: $id}')" \
+  http://127.0.0.1:47832/api/note/delete >/dev/null
+[[ -f $external_file ]]
+[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+  "SELECT COUNT(*) FROM attachments WHERE id = 'unsafe-note-attachment'") == 0 ]]
+
+"$cli" note add 'Single attachment guard'
+guard_note_id=$("$cli" state | jq -r '.notes[] | select(.text == "Single attachment guard") | .id')
+sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" <<SQL
+INSERT INTO attachments VALUES (
+  'unsafe-single-attachment', '$guard_note_id', 'outside.txt', 'image/png', '$external_file', 0, 1
+);
+SQL
+[[ $(curl -sS -o "$tmp/unsafe-attachment.json" -w '%{http_code}' -X POST \
+  -H 'Content-Type: application/json' --data '{"id":"unsafe-single-attachment"}' \
+  http://127.0.0.1:47832/api/attachment/delete) == 400 ]]
+grep -Fq 'attachment file path is unsafe' "$tmp/unsafe-attachment.json"
+[[ -f $external_file ]]
+[[ $(sqlite3 "$AGENT_FEED_STATE_DIR/agent-feed.db" \
+  "SELECT COUNT(*) FROM attachments WHERE id = 'unsafe-single-attachment'") == 1 ]]
+
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data '{"sectionId":"inbox:unsorted","text":"Viewer move control test"}' \
+  http://127.0.0.1:47832/api/note/create >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data '{"bucketId":"inbox","name":"Drag middle"}' \
+  http://127.0.0.1:47832/api/section/create >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data '{"bucketId":"inbox","name":"Drag last"}' \
+  http://127.0.0.1:47832/api/section/create >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data '{"bucketId":"ideas","name":"Cross bucket queue"}' \
+  http://127.0.0.1:47832/api/section/create >/dev/null
+cross_bucket_section=$(curl -fsS 'http://127.0.0.1:47832/api/bucket?id=ideas' \
+  | jq -r '.sections[] | select(.name == "Cross bucket queue") | .id')
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$cross_bucket_section" '{id: $id}')" \
+  http://127.0.0.1:47832/api/section/queue >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data '{"action":"start","bucketId":"inbox","sectionId":"inbox:unsorted"}' \
+  http://127.0.0.1:47832/api/feed | jq -e '.feedEnabled == true' >/dev/null
 
 chromium --headless=new --disable-gpu --no-first-run --no-default-browser-check \
   --remote-debugging-port=0 --user-data-dir="$tmp/chromium" \
@@ -153,6 +214,12 @@ done
 debug_port=$(head -n 1 "$tmp/chromium/DevToolsActivePort")
 node "$root/tests/test-viewer-keyboard.mjs" "$debug_port" \
   'http://127.0.0.1:47832/?bucket=inbox'
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data '{"action":"stop"}' http://127.0.0.1:47832/api/feed \
+  | jq -e '.feedEnabled == false' >/dev/null
+curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg id "$cross_bucket_section" '{id: $id}')" \
+  http://127.0.0.1:47832/api/section/dequeue >/dev/null
 kill "$browser" 2>/dev/null || true
 wait "$browser" 2>/dev/null || true
 browser=''

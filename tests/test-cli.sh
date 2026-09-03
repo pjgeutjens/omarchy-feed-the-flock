@@ -129,6 +129,34 @@ jq -e --arg section "$interface_section" \
   '.activeSectionId == $section and .notes[0].sectionId == $section
    and .notes[0].text == "Captured in selected section"' <<< "$state" >/dev/null
 "$cli" note delete "$(jq -r '.notes[0].id' <<< "$state")"
+
+cancelled_capture="$AGENT_FEED_STATE_DIR/captures/capture.cancel-test.txt"
+printf 'Must not become a note' >"$cancelled_capture"
+python3 - "$AGENT_FEED_STATE_DIR/agent-feed.db" "$cancelled_capture" <<'PY'
+import json
+import sqlite3
+import sys
+
+with sqlite3.connect(sys.argv[1]) as db:
+    db.execute("UPDATE settings SET value = 'transcribing' WHERE key = 'phase'")
+    db.execute(
+        "UPDATE settings SET value = ? WHERE key = 'active_capture'",
+        (json.dumps({
+            "path": sys.argv[2],
+            "bucketId": "work-notes",
+            "sectionId": "work-notes:interface",
+        }),),
+    )
+PY
+"$cli" record cancel
+[[ ! -e $cancelled_capture ]]
+jq -e '.phase == "cancelled"' <<< "$("$cli" state)" >/dev/null
+"$cli" _finalize "$cancelled_capture" work-notes "$interface_section"
+if "$cli" state | jq -e '.notes[] | select(.text == "Must not become a note")' >/dev/null; then
+  echo "cancelled transcription was added after finalizer cancellation" >&2
+  exit 1
+fi
+
 "$cli" note add "Animate incoming notes"
 state=$("$cli" state)
 work_note=$(jq -r '.notes[0].id' <<< "$state")

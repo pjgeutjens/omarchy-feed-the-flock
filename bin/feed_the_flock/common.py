@@ -32,6 +32,7 @@ OMARCHY_SYSTEM_THEMES = Path("/usr/share/omarchy/themes")
 VOXTYPE = os.environ.get("AGENT_FEED_VOXTYPE", "voxtype")
 HERDR = os.environ.get("AGENT_FEED_HERDR", "herdr")
 DEFAULT_BUCKETS = (("inbox", "Inbox"), ("agent-feed", "Agent Feed"), ("ideas", "Ideas"))
+MAX_LOG_BYTES = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,27 @@ def run_quiet(command: Sequence[str], *, timeout: float, input_data: bytes | Non
         process.wait(timeout=1)
         raise
     return process.returncode
+
+
+def open_private_log(path: Path, *, max_bytes: int = MAX_LOG_BYTES) -> BinaryIO:
+    """Open one owner-only regular log and cap retained output before appending."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW,
+        0o600,
+    )
+    try:
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode) or details.st_uid != os.getuid():
+            raise ValueError("log path is unsafe")
+        os.fchmod(descriptor, 0o600)
+        if details.st_size > max_bytes:
+            os.ftruncate(descriptor, 0)
+        return os.fdopen(descriptor, "ab")
+    except Exception:
+        os.close(descriptor)
+        raise
 
 
 def read_regular_file(path: Path, *, root: Path, max_bytes: int) -> bytes:

@@ -63,6 +63,15 @@ function refreshHelp() {
   orderHelp.textContent = selectedDescription(orderSelect, ORDERS);
 }
 
+function moveSelection(select, direction) {
+  const enabled = [...select.options].filter(option => !option.disabled);
+  if (!enabled.length) return;
+  const current = Math.max(0, enabled.indexOf(select.selectedOptions[0]));
+  const next = Math.max(0, Math.min(enabled.length - 1, current + direction));
+  select.value = enabled[next].value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function setMessage(text, kind = '') {
   message.textContent = text;
   message.className = `routing-message${kind ? ` ${kind}` : ''}`;
@@ -175,7 +184,15 @@ backdrop.addEventListener('mousedown', event => {
   if (event.target === backdrop) closeRouting();
 });
 backdrop.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !busy) {
+  const focusedSelect = event.target instanceof HTMLSelectElement ? event.target : null;
+  const key = event.key.toLowerCase();
+  if (!busy && focusedSelect && (key === 'j' || key === 'k')) {
+    event.preventDefault();
+    moveSelection(focusedSelect, key === 'j' ? 1 : -1);
+  } else if (!busy && focusedSelect && event.key === 'Enter' && !apply.disabled) {
+    event.preventDefault();
+    card.requestSubmit();
+  } else if (event.key === 'Escape' && !busy) {
     event.preventDefault();
     closeRouting();
   } else if (event.key === 'Tab') {
