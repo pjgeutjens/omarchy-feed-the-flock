@@ -67,48 +67,48 @@ Column {
       id: bucketOrderActions
       spacing: Style.space(2)
       PanelActionButton {
-        iconText: "‹"
+        iconText: "󰅁" // nf-md-chevron_left
         tooltipText: "Move active bucket left"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: AgentFeedCore.AgentFeedState.moveBucket(
           AgentFeedCore.AgentFeedState.activeBucketId, "left")
       }
       PanelActionButton {
-        iconText: "›"
+        iconText: "󰅂" // nf-md-chevron_right
         tooltipText: "Move active bucket right"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: AgentFeedCore.AgentFeedState.moveBucket(
           AgentFeedCore.AgentFeedState.activeBucketId, "right")
       }
       PanelActionButton {
-        iconText: "⇧"
+        iconText: "󰋺" // nf-md-import
         tooltipText: "Import Markdown bucket (I)"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: AgentFeedCore.AgentFeedState.importBucket()
       }
       PanelActionButton {
-        iconText: "⇩"
+        iconText: "󰈇" // nf-md-export
         tooltipText: "Export active bucket to Downloads (X)"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: AgentFeedCore.AgentFeedState.exportBucket(
           AgentFeedCore.AgentFeedState.activeBucketId)
       }
       PanelActionButton {
-        iconText: "✎"
+        iconText: "󰏫" // nf-md-pencil
         tooltipText: "Rename active bucket"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: root.beginRename()
       }
       PanelActionButton {
-        iconText: "×"
+        iconText: "󰅖" // nf-md-close
         tooltipText: "Delete active bucket"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: AgentFeedCore.AgentFeedState.deleteBucket(
           AgentFeedCore.AgentFeedState.activeBucketId)
       }

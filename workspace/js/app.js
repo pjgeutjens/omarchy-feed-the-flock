@@ -225,8 +225,29 @@ targetNameEl.addEventListener('click', () => openRouting({
 }));
 
 const noteEditor = createNoteEditor({ setStatus });
+
+async function createNote(sectionId, beforeNoteId = null) {
+  try {
+    const result = await request('/api/note/create', {
+      method: 'POST',
+      body: JSON.stringify({ sectionId, beforeNoteId, text: 'New note' })
+    });
+    await load();
+    const newText = document.querySelector(
+      `[data-note-id="${CSS.escape(result.id)}"] .text`
+    );
+    if (newText) {
+      newText.textContent = '';
+      noteEditor.begin(newText, false, true);
+    }
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 const navigation = createViewerNavigation({
   copyText,
+  createNote,
   exportBucket,
   importBucket,
   noteEditor,
@@ -249,6 +270,7 @@ const noteElement = createNoteRenderer({
   uploadAttachments,
 });
 const { addSectionControl, sectionElement } = createSectionRenderer({
+  createNote,
   dragState,
   getBucketId: () => bucketId,
   load,

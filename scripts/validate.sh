@@ -56,6 +56,12 @@ grep -Fq '|| modePicker.popupOpen || orderPicker.popupOpen' \
     exit 1
   }
 grep -Fq '|| routingControls.popupOpen' "$plugin_dir/Panel.qml"
+grep -Fq 'iconText: "󰅁"' "$plugin_dir/PanelBucketControls.qml"
+grep -Fq 'iconText: "󰅂"' "$plugin_dir/PanelBucketControls.qml"
+grep -Fq 'iconText: "󰋺"' "$plugin_dir/PanelBucketControls.qml"
+grep -Fq 'iconText: "󰈇"' "$plugin_dir/PanelBucketControls.qml"
+grep -Fq 'iconText: "󰅁"' "$plugin_dir/PanelSectionControls.qml"
+grep -Fq 'iconText: "󰅂"' "$plugin_dir/PanelSectionControls.qml"
 grep -Fq '"hint": "oldest pending first"' "$plugin_dir/AgentFeedState.qml"
 grep -Fq '"hint": "newest pending first"' "$plugin_dir/AgentFeedState.qml"
 if grep -Eiq 'topmost|bottommost' "$plugin_dir/AgentFeedState.qml"; then
@@ -83,9 +89,10 @@ grep -Fq '"--disable-extensions", "--no-first-run", "--no-default-browser-check"
 grep -Fq "event.stopImmediatePropagation();" "$plugin_dir/workspace/js/viewer-navigation.js"
 grep -Fq "['j', 'k'].includes(key)" "$plugin_dir/workspace/js/viewer-navigation.js"
 grep -Fq "['h', 'l'].includes(key)" "$plugin_dir/workspace/js/viewer-navigation.js"
-grep -Fq "function triggerSelectedAction(key)" "$plugin_dir/workspace/js/viewer-navigation.js"
-grep -Fq "a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'" \
+grep -Fq "function triggerSelectedAction(key, rawKey)" \
   "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "if (key === 'a' || key === 'o')" "$plugin_dir/workspace/js/viewer-navigation.js"
+grep -Fq "key === 's'" "$plugin_dir/workspace/js/viewer-navigation.js"
 grep -Fq "event.key === '/'" "$plugin_dir/workspace/js/viewer-navigation.js"
 grep -Fq "event.key === '?'" "$plugin_dir/workspace/js/viewer-navigation.js"
 grep -Fq "if (!container.hidden)" "$plugin_dir/workspace/js/viewer-navigation.js"

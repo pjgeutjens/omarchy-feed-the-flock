@@ -109,11 +109,11 @@ Column {
       id: sectionOrderActions
       spacing: Style.space(2)
       PanelActionButton {
-        iconText: "+"
+        iconText: "󰐕" // nf-md-plus
         tooltipText: "Add active section to feed queue (G)"
         foreground: root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) >= 0
           ? Color.accent : root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         enabled: AgentFeedCore.AgentFeedState.activeSectionId
           !== AgentFeedCore.AgentFeedState.feedSectionId
           && root.feedQueuePosition(AgentFeedCore.AgentFeedState.activeSectionId) < 0
@@ -131,31 +131,31 @@ Column {
           AgentFeedCore.AgentFeedState.activeSectionId)
       }
       PanelActionButton {
-        iconText: "‹"
+        iconText: "󰅁" // nf-md-chevron_left
         tooltipText: "Move active section left"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: root.moveActiveSectionOrder("left")
       }
       PanelActionButton {
-        iconText: "›"
+        iconText: "󰅂" // nf-md-chevron_right
         tooltipText: "Move active section right"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: root.moveActiveSectionOrder("right")
       }
       PanelActionButton {
-        iconText: "✎"
+        iconText: "󰏫" // nf-md-pencil
         tooltipText: "Rename active section"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         onClicked: root.beginRename()
       }
       PanelActionButton {
-        iconText: "×"
+        iconText: "󰅖" // nf-md-close
         tooltipText: "Delete active section; notes move to Unsorted"
         foreground: root.dimForeground
-        fontFamily: root.fontFamily
+        fontFamily: "JetBrainsMono Nerd Font"
         enabled: !root.selectedSectionIsFallback()
         onClicked: root.beginDelete()
       }

@@ -451,12 +451,15 @@ class WorkspaceHandler(BaseHTTPRequestHandler):
                     return
                 if parsed.path == "/api/note/create":
                     section_id, text = str(value.get("sectionId", "")), str(value.get("text", "")).strip()
+                    before = value.get("beforeNoteId")
                     section = db.execute(
                         "SELECT bucket_id FROM sections WHERE id = ?", (section_id,)
                     ).fetchone()
                     if not section:
                         raise ValueError("section does not exist")
                     note_id = add_note_to_db(db, section["bucket_id"], text, section_id)
+                    if before:
+                        place_note_in_section(db, note_id, section_id, str(before))
                     db.commit()
                     self.json_response(200, {"id": note_id})
                     return

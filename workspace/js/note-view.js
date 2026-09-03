@@ -209,9 +209,7 @@ export function createNoteRenderer({
       const addImage = document.createElement('button');
       addImage.className = 'attachment-add-inline note-action';
       addImage.type = 'button';
-      addImage.dataset.viewerAction = 'add';
-      addImage.title = 'Add image (A)';
-      addImage.setAttribute('aria-keyshortcuts', 'A');
+      addImage.title = 'Add image';
       addImage.setAttribute('aria-label', addImage.title);
       const addImageGlyph = document.createElement('span');
       addImageGlyph.className = 'add-image-glyph';

@@ -3,6 +3,7 @@ import { isRoutingOpen } from './routing.js';
 
 export function createViewerNavigation({
   copyText,
+  createNote,
   exportBucket,
   importBucket,
   noteEditor,
@@ -80,7 +81,28 @@ export function createViewerNavigation({
     return true;
   }
 
-  function triggerSelectedAction(key) {
+  function noteInsertionTarget(note, before) {
+    if (note.classList.contains('sent')) {
+      return before ? firstPendingNoteId(note.closest('section')) : null;
+    }
+    if (before) return note.dataset.noteId || null;
+    let sibling = note.nextElementSibling;
+    while (sibling) {
+      if (sibling.classList?.contains('note') && !sibling.classList.contains('sent')) {
+        return sibling.dataset.noteId || null;
+      }
+      sibling = sibling.nextElementSibling;
+    }
+    return null;
+  }
+
+  function firstPendingNoteId(section) {
+    return section?.querySelector('.note:not(.sent)')?.dataset.noteId || null;
+  }
+
+  function triggerSelectedAction(key, rawKey) {
+    if (key === 's') return clickSelectedAction(document, 'add-section');
+
     const note = document.querySelector('.note.selected');
     if (note) {
       if (key === 'enter') {
@@ -95,15 +117,24 @@ export function createViewerNavigation({
         copyText(text.innerText);
         return true;
       }
-      const action = { a: 'add', f: 'feed', r: 'requeue', delete: 'delete' }[key];
+      if (key === 'a' || key === 'o') {
+        const sectionId = note.closest('section')?.dataset.sectionId;
+        if (!sectionId) return false;
+        const before = key === 'o' ? noteInsertionTarget(note, rawKey === 'O') : null;
+        createNote(sectionId, before);
+        return true;
+      }
+      const action = { f: 'feed', r: 'requeue', delete: 'delete' }[key];
       return action ? clickSelectedAction(note, action) : false;
     }
 
     const section = document.querySelector('section.selected');
     if (!section) return false;
-    const action = {
-      a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'
-    }[key];
+    if (key === 'a' || key === 'o') {
+      createNote(section.dataset.sectionId, rawKey === 'O' ? firstPendingNoteId(section) : null);
+      return true;
+    }
+    const action = { q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete' }[key];
     return action ? clickSelectedAction(section, action) : false;
   }
 
@@ -161,7 +192,7 @@ export function createViewerNavigation({
   function showKeyboardReference() {
     showModal({
       title: 'Keyboard shortcuts',
-      message: 'SELECT\nJ / K  Previous / next note\nH / L  Previous / next section\n\nSELECTED NOTE\nA  Add image\nF  Feed now\nR  Requeue submitted note\nDelete  Delete note\nEnter  Edit note\nY  Copy note\n\nSELECTED SECTION\nA  Add note\nQ  Add to feed queue\nF  Feed now\nR  Rename\nC  Clear\nDelete  Delete section\n\nGLOBAL\n/  Search headings and notes\nI  Import Markdown bucket\nX  Export current bucket\n?  Open this reference\nEsc  Close search or dialog',
+      message: 'SELECT\nJ / K  Previous / next note\nH / L  Previous / next section\n\nADD\nA  Add note at end of selected note’s section\no / O  Add note after / before the selected note\nS  Add section\n\nSELECTED NOTE\nF  Feed now\nR  Requeue submitted note\nDelete  Delete note\nEnter  Edit note\nY  Copy note\n\nSELECTED SECTION\nQ  Add to feed queue\nF  Feed now\nR  Rename\nC  Clear\nDelete  Delete section\n\nGLOBAL\n/  Search headings and notes\nI  Import Markdown bucket\nX  Export current bucket\n?  Open this reference\nEsc  Close search or dialog',
       confirmLabel: 'Close'
     });
   }
@@ -222,7 +253,7 @@ export function createViewerNavigation({
     } else if (event.key === '?') {
       showKeyboardReference();
       handled = true;
-    } else handled = triggerSelectedAction(key);
+    } else handled = triggerSelectedAction(key, event.key);
     if (!handled) return;
     event.preventDefault();
     event.stopImmediatePropagation();

@@ -146,6 +146,34 @@ try {
   await press({ key: 'f', code: 'KeyF', keyCode: 70 });
   assert(await evaluate(`window.__noteActionCount === 1`),
     'F did not invoke the selected note action');
+
+  const noteCount = await evaluate(`document.querySelectorAll('.note').length`);
+  await press({ key: 'a', code: 'KeyA', keyCode: 65 });
+  await waitFor(
+    `Boolean(document.querySelector('.note .text[data-provisional-note="true"]'))`,
+    'new note editor opened by A'
+  );
+  assert(await evaluate(`document.querySelectorAll('.note').length === ${noteCount + 1}`),
+    'A did not create a note in the selected note section');
+  assert(await evaluate(`!document.querySelector('input[type="file"]')`),
+    'A opened an attachment picker instead of adding a note');
+  await press({ key: 'Escape', code: 'Escape', keyCode: 27 });
+  await waitFor(`document.querySelectorAll('.note').length === ${noteCount}`,
+    'provisional note cleanup');
+
+  await press({ key: 'l', code: 'KeyL', keyCode: 76 });
+  assert(await evaluate(`Boolean(document.querySelector('section.selected'))`),
+    'section selection was unavailable before testing S');
+  assert(await evaluate(`(() => {
+    const button = document.querySelector('[data-viewer-action="add-section"]');
+    return Boolean(button && !button.disabled && button.checkVisibility());
+  })()`), 'Add section button is unavailable');
+  await press({ key: 's', code: 'KeyS', keyCode: 83 });
+  await waitFor(`!document.querySelector('#modal-backdrop').hidden`,
+    'section creation dialog opened by S');
+  assert(await evaluate(`document.querySelector('#modal-title').textContent === 'Create section'`),
+    'S opened the wrong action');
+  await press({ key: 'Escape', code: 'Escape', keyCode: 27 });
 } finally {
   socket.close();
 }

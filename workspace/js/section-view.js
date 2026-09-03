@@ -2,6 +2,7 @@ import { request } from './api.js';
 import { requestText, showModal } from './modal.js';
 
 export function createSectionRenderer({
+  createNote,
   dragState,
   getBucketId,
   load,
@@ -291,24 +292,7 @@ export function createSectionRenderer({
     add.title = 'Add note (A)';
     add.setAttribute('aria-keyshortcuts', 'A');
     add.textContent = '+ Add Note';
-    add.addEventListener('click', async () => {
-      try {
-        const result = await request('/api/note/create', {
-          method: 'POST',
-          body: JSON.stringify({ sectionId: section.id, text: 'New note' })
-        });
-        await load();
-        const newText = document.querySelector(
-          `[data-note-id="${CSS.escape(result.id)}"] .text`
-        );
-        if (newText) {
-          newText.textContent = '';
-          noteEditor.begin(newText, false, true);
-        }
-      } catch (error) {
-        setStatus(error.message, true);
-      }
-    });
+    add.addEventListener('click', () => createNote(section.id));
 
     sectionEl.append(headingRow, notes, add);
     return sectionEl;
@@ -318,6 +302,9 @@ export function createSectionRenderer({
     const button = document.createElement('button');
     button.className = 'add';
     button.type = 'button';
+    button.dataset.viewerAction = 'add-section';
+    button.title = 'Add section (S)';
+    button.setAttribute('aria-keyshortcuts', 'S');
     button.textContent = '+ Add section';
     button.onclick = async () => {
       const name = await requestText({

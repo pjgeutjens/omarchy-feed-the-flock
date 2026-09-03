@@ -127,8 +127,9 @@ curl -fsS http://127.0.0.1:47832/ | grep -Fq 'id="viewer-search-input"'
 curl -fsS http://127.0.0.1:47832/js/app.js | grep -Fq "request('/api/notes/reset-all'"
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "['j', 'k'].includes(key)"
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "['h', 'l'].includes(key)"
-curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'function triggerSelectedAction(key)'
-curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "a: 'add', q: 'queue', f: 'feed', r: 'rename', c: 'clear', delete: 'delete'"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'function triggerSelectedAction(key, rawKey)'
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "if (key === 'a' || key === 'o')"
+curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "key === 's'"
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq 'event.stopImmediatePropagation();'
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "event.key === '/'"
 curl -fsS http://127.0.0.1:47832/js/viewer-navigation.js | grep -Fq "event.key === '?'"
